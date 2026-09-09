@@ -1,0 +1,360 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>现代布局选型指南：Flex / Grid / 容器查询 | 眉眼如初、</title><meta name="author" content="眉眼如初、"><meta name="copyright" content="眉眼如初、"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="Flex、Grid、容器查询不是三选一，而是三层抽象：Flex 管一维空间分配，Grid 管二维结构划分，容器查询把响应式从视口下沉到组件。从三个真实场景出发，讲清各自的原理边界与踩坑，最后给一张选型决策表。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="现代布局选型指南：Flex &#x2F; Grid &#x2F; 容器查询">
+<meta property="og:url" content="https://stellacode98.github.io/2026/09/09/css-modern-layout/index.html">
+<meta property="og:site_name" content="眉眼如初、">
+<meta property="og:description" content="Flex、Grid、容器查询不是三选一，而是三层抽象：Flex 管一维空间分配，Grid 管二维结构划分，容器查询把响应式从视口下沉到组件。从三个真实场景出发，讲清各自的原理边界与踩坑，最后给一张选型决策表。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://stellacode98.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-09-09T02:10:09.000Z">
+<meta property="article:modified_time" content="2026-09-09T12:48:53.687Z">
+<meta property="article:author" content="眉眼如初、">
+<meta property="article:tag" content="css">
+<meta property="article:tag" content="flex">
+<meta property="article:tag" content="grid">
+<meta property="article:tag" content="容器查询">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://stellacode98.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "现代布局选型指南：Flex / Grid / 容器查询",
+  "url": "https://stellacode98.github.io/2026/09/09/css-modern-layout/",
+  "image": "https://stellacode98.github.io/img/avatar.jpg",
+  "datePublished": "2026-09-09T02:10:09.000Z",
+  "dateModified": "2026-09-09T12:48:53.687Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "眉眼如初、",
+      "url": "https://stellacode98.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.ico"><link rel="canonical" href="https://stellacode98.github.io/2026/09/09/css-modern-layout/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '现代布局选型指南：Flex / Grid / 容器查询',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/bg-video.css"><meta name="generator" content="Hexo 8.1.2"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">16</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">68</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">13</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/gufeng-girl.webp);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">眉眼如初、</span></a><a class="nav-page-title" href="/"><span class="site-name">现代布局选型指南：Flex / Grid / 容器查询</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">现代布局选型指南：Flex / Grid / 容器查询</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-09T02:10:09.000Z" title="发表于 2026-09-09 10:10:09">2026-09-09</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-09T12:48:53.687Z" title="更新于 2026-09-09 20:48:53">2026-09-09</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%89%8D%E7%AB%AF%E5%9F%BA%E7%A1%80/">前端基础</a><i class="fas fa-angle-right post-meta-separator"></i><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%89%8D%E7%AB%AF%E5%9F%BA%E7%A1%80/css/">css</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p>刚写页面那几年，我的布局知识就两样：float + position。后来 Flexbox 出了，就开始「flex 一把梭」——导航用它，列表用它，页面骨架也用它。真正逼我去补课的是三个场景：</p>
+<ol>
+<li><strong>工具栏</strong>：一行按钮，最后一个「导出」要贴右。flex 加一个 <code>margin-left: auto</code> 就优雅解决。</li>
+<li><strong>商品卡片列表</strong>：<code>flex-wrap</code> 写的网格，最后一行只剩 2 个卡片，被 <code>flex-grow</code> 拉成两倍宽，和上一行完全对不齐。换成 Grid 一行代码解决。</li>
+<li><strong>同一个卡片组件</strong>：放在主区域有 400px+，塞进侧边栏只剩 260px。媒体查询感知的是<strong>视口</strong>，视口没变，组件却「住」进了小房间——这时需要容器查询。</li>
+</ol>
+<p>这三个场景对应三套工具，而它们不是竞争关系，是三层不同的抽象。web.dev 的 Learn CSS 课程里有个说法我一直拿来当心智模型：<strong>Flex 是 content-out（从内容出发，往外分配空间），Grid 是 layout-in（先定轨道结构，再把内容放进去）</strong>。容器查询则更进一步：组件不再问「视口多宽」，而是问「我自己家多宽」。</p>
+<span id="more"></span>
+
+<h2 id="一、Flex：一维空间分配器"><a href="#一、Flex：一维空间分配器" class="headerlink" title="一、Flex：一维空间分配器"></a>一、Flex：一维空间分配器</h2><p>先把 Flex 的分配算法说透，因为后面大部分「玄学」都出在这里。</p>
+<p>一行 flex 的空间计算只有三步：</p>
+<ol>
+<li>每个 item 按 <code>flex-basis</code> 得到一个<strong>假想主尺寸</strong>（<code>basis: auto</code> 时取内容宽度）；</li>
+<li><strong>剩余空间</strong> &#x3D; 容器宽度 − Σ假想尺寸 − gap。剩余为正，按 <code>flex-grow</code> 的比例加权分配；为负，按 <code>flex-shrink</code> 加权回收；</li>
+<li>回收有下限——item 的默认 <code>min-width: auto</code>（内容最小宽度），<strong>压不破内容</strong>，这正是多数「压不动」问题的根源。</li>
+</ol>
+<p>注意第 2 步：grow 只按比例分，shrink 却要乘上 basis 加权（内容越宽让得越多）。所以「等分」这件事，起点比 grow 更重要。看四个关键字的真值表：</p>
+<table>
+<thead>
+<tr>
+<th>写法</th>
+<th>展开为</th>
+<th>行为</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>flex: 1</code></td>
+<td><code>1 1 0%</code></td>
+<td>起点归零，完全等分，<strong>内容不参与</strong></td>
+</tr>
+<tr>
+<td><code>flex: auto</code></td>
+<td><code>1 1 auto</code></td>
+<td>先按内容，再均摊剩余空间</td>
+</tr>
+<tr>
+<td><code>flex: none</code></td>
+<td><code>0 0 auto</code></td>
+<td>定宽，不参与分配</td>
+</tr>
+<tr>
+<td><code>flex: initial</code>（默认）</td>
+<td><code>0 1 auto</code></td>
+<td>按内容，只挤不涨</td>
+</tr>
+</tbody></table>
+<h3 id="坑-1：以为-flex-1-和-flex-auto-等价"><a href="#坑-1：以为-flex-1-和-flex-auto-等价" class="headerlink" title="坑 1：以为 flex: 1 和 flex: auto 等价"></a>坑 1：以为 <code>flex: 1</code> 和 <code>flex: auto</code> 等价</h3><figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-tag">&lt;<span class="hljs-name">style</span>&gt;</span><span class="language-css"></span><br><span class="language-css">  <span class="hljs-selector-class">.row</span> &#123; <span class="hljs-attribute">display</span>: flex; <span class="hljs-attribute">gap</span>: <span class="hljs-number">8px</span>; <span class="hljs-attribute">margin-bottom</span>: <span class="hljs-number">8px</span>; &#125;</span><br><span class="language-css">  <span class="hljs-selector-class">.row</span> &gt; <span class="hljs-selector-tag">div</span> &#123; <span class="hljs-attribute">background</span>: <span class="hljs-number">#eee</span>; <span class="hljs-attribute">padding</span>: <span class="hljs-number">8px</span> <span class="hljs-number">4px</span>; <span class="hljs-attribute">text-align</span>: center; &#125;</span><br><span class="language-css">  <span class="hljs-selector-class">.a</span> &gt; <span class="hljs-selector-tag">div</span> &#123; <span class="hljs-attribute">flex</span>: <span class="hljs-number">1</span>; &#125;    <span class="hljs-comment">/* 1 1 0%：起点是 0，三分天下 */</span></span><br><span class="language-css">  <span class="hljs-selector-class">.b</span> &gt; <span class="hljs-selector-tag">div</span> &#123; <span class="hljs-attribute">flex</span>: auto; &#125; <span class="hljs-comment">/* 1 1 auto：起点是内容宽，长内容永远更宽 */</span></span><br><span class="language-css"></span><span class="hljs-tag">&lt;/<span class="hljs-name">style</span>&gt;</span><br><br><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;row a&quot;</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>短<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>我是比较长的那一项内容<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>中<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;row b&quot;</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>短<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>我是比较长的那一项内容<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>中<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br></code></pre></td></tr></table></figure>
+
+<p>上面一行三个格子严格等宽；下面一行长内容的格子更宽。要做「平分」，<code>flex: 1</code>（basis 归零）才是对的；要让内容保留差异再分剩余，才用 <code>flex: auto</code>。我在一个后台项目里见过满屏的 <code>flex: auto</code> 导致三栏表单宽窄不一，改成 <code>flex: 1</code> 立刻齐了。</p>
+<h3 id="坑-2：min-width-auto-——-flex-里最经典的「文字压不动」"><a href="#坑-2：min-width-auto-——-flex-里最经典的「文字压不动」" class="headerlink" title="坑 2：min-width: auto —— flex 里最经典的「文字压不动」"></a>坑 2：min-width: auto —— flex 里最经典的「文字压不动」</h3><figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-tag">&lt;<span class="hljs-name">style</span>&gt;</span><span class="language-css"></span><br><span class="language-css">  <span class="hljs-selector-class">.outer</span> &#123;</span><br><span class="language-css">    <span class="hljs-attribute">display</span>: flex;</span><br><span class="language-css">    <span class="hljs-attribute">width</span>: <span class="hljs-number">320px</span>;                 <span class="hljs-comment">/* 容器故意给窄 */</span></span><br><span class="language-css">    <span class="hljs-attribute">border</span>: <span class="hljs-number">1px</span> dashed red;</span><br><span class="language-css">  &#125;</span><br><span class="language-css">  <span class="hljs-selector-class">.outer</span> &gt; <span class="hljs-selector-class">.text</span> &#123;</span><br><span class="language-css">    <span class="hljs-attribute">flex</span>: <span class="hljs-number">1</span>;</span><br><span class="language-css">    <span class="hljs-attribute">white-space</span>: nowrap;          <span class="hljs-comment">/* 想做单行省略号 */</span></span><br><span class="language-css">    <span class="hljs-attribute">overflow</span>: hidden;</span><br><span class="language-css">    <span class="hljs-attribute">text-overflow</span>: ellipsis;</span><br><span class="language-css">  &#125;</span><br><span class="language-css">  <span class="hljs-selector-class">.outer</span> &gt; <span class="hljs-selector-class">.fixed</span> &#123; <span class="hljs-attribute">flex</span>: none; <span class="hljs-attribute">width</span>: <span class="hljs-number">120px</span>; <span class="hljs-attribute">background</span>: <span class="hljs-number">#eee</span>; &#125;</span><br><span class="language-css"></span><br><span class="language-css">  <span class="hljs-selector-class">.fixed-row</span> &gt; <span class="hljs-selector-class">.text</span> &#123; <span class="hljs-attribute">min-width</span>: <span class="hljs-number">0</span>; &#125;  <span class="hljs-comment">/* 修复：解除内容最小宽度限制 */</span></span><br><span class="language-css"></span><span class="hljs-tag">&lt;/<span class="hljs-name">style</span>&gt;</span><br><br><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;outer&quot;</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;text&quot;</span>&gt;</span>这一行很长很长的标题本来应该被省略号截断<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;fixed&quot;</span>&gt;</span>固定 120px<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><br><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;outer fixed-row&quot;</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;text&quot;</span>&gt;</span>这一行很长很长的标题本来应该被省略号截断<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;fixed&quot;</span>&gt;</span>固定 120px<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br></code></pre></td></tr></table></figure>
+
+<p>第一个盒子：文字的 <code>min-content</code> 宽度成了 item 的隐形下限（<code>min-width: auto</code>），省略号失效，固定列被挤出去。第二个盒子加了一行 <code>min-width: 0</code>，立刻正常。</p>
+<p><strong>为什么规范这么设计？</strong> 默认保住内容完整（比如一段文字不被压到 0 宽），是更安全的兜底。代价是：当你明确要「内容让路」时，必须手动解除。同理，设 <code>overflow: hidden</code> 也会让最小宽度归零——所以「加个 overflow: hidden 就好了」背后的原理是同一件事。</p>
+<h3 id="一个被低估的技巧：margin-auto"><a href="#一个被低估的技巧：margin-auto" class="headerlink" title="一个被低估的技巧：margin: auto"></a>一个被低估的技巧：margin: auto</h3><p>flex 容器里，<code>auto</code> margin 会吸收该轴上的全部剩余空间。工具栏场景一行搞定：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-tag">&lt;<span class="hljs-name">style</span>&gt;</span><span class="language-css"></span><br><span class="language-css">  <span class="hljs-selector-class">.toolbar</span> &#123; <span class="hljs-attribute">display</span>: flex; <span class="hljs-attribute">gap</span>: <span class="hljs-number">8px</span>; &#125;</span><br><span class="language-css">  <span class="hljs-selector-class">.toolbar</span> <span class="hljs-selector-class">.export</span> &#123; <span class="hljs-attribute">margin-left</span>: auto; &#125;  <span class="hljs-comment">/* 把剩余空间全吸到自己左边 */</span></span><br><span class="language-css"></span><span class="hljs-tag">&lt;/<span class="hljs-name">style</span>&gt;</span><br><br><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;toolbar&quot;</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">button</span>&gt;</span>新建<span class="hljs-tag">&lt;/<span class="hljs-name">button</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">button</span>&gt;</span>删除<span class="hljs-tag">&lt;/<span class="hljs-name">button</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">button</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;export&quot;</span>&gt;</span>导出<span class="hljs-tag">&lt;/<span class="hljs-name">button</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br></code></pre></td></tr></table></figure>
+
+<p>比 <code>justify-content: space-between</code> 干净的地方在于：不需要包一层、也不影响其他按钮的间距逻辑。</p>
+<h2 id="二、Grid：先画格子，再放东西"><a href="#二、Grid：先画格子，再放东西" class="headerlink" title="二、Grid：先画格子，再放东西"></a>二、Grid：先画格子，再放东西</h2><p>Grid 的思路反过来：<strong>先把轨道（track）结构定好，再把 item 放进格子</strong>。它和 Flex 的底层分配思想其实是同一套——<code>fr</code> 就是「剩余空间的份数」：先扣除固定轨道和 gap，剩余部分按 fr 比例分。区别在于 Flex 把空间分给 item，Grid 把空间分给轨道。</p>
+<h3 id="一行代码的响应式网格"><a href="#一行代码的响应式网格" class="headerlink" title="一行代码的响应式网格"></a>一行代码的响应式网格</h3><p>卡片列表这种场景，Grid 有个杀手级写法：</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs css"><span class="hljs-selector-class">.grid</span> &#123;<br>  <span class="hljs-attribute">display</span>: grid;<br>  <span class="hljs-attribute">grid-template-columns</span>: <span class="hljs-built_in">repeat</span>(auto-fill, <span class="hljs-built_in">minmax</span>(<span class="hljs-number">220px</span>, <span class="hljs-number">1</span>fr));<br>  <span class="hljs-attribute">gap</span>: <span class="hljs-number">16px</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>不带一个媒体查询，就实现了「容器够宽就多放一列，不够就少放，每列不窄于 220px」。拆开看它的计算过程（假设容器 920px、gap 16px）：</p>
+<ol>
+<li><code>auto-fill</code>：尽可能多地创建轨道。n 列放得下的条件是 <code>n × 220 + (n − 1) × 16 ≤ 920</code>，n &#x3D; 3 时是 692px ✓，n &#x3D; 4 时 928px ✗ → 建 3 根轨道；</li>
+<li><code>minmax(220px, 1fr)</code>：每根轨道最小 220px、最大取剩余空间份数。剩余 920 − 692 &#x3D; 228px，平摊给 3 根轨道各 76px → 最终每列约 296px。</li>
+</ol>
+<p>改窗口宽度，这套算术自动重算——这就是「响应式不需要断点」的出处。</p>
+<h3 id="坑-3：flex-wrap-的最后一行问题"><a href="#坑-3：flex-wrap-的最后一行问题" class="headerlink" title="坑 3：flex-wrap 的最后一行问题"></a>坑 3：flex-wrap 的最后一行问题</h3><p>回到开头说的商品列表。两种写法放一起看：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-tag">&lt;<span class="hljs-name">style</span>&gt;</span><span class="language-css"></span><br><span class="language-css">  <span class="hljs-selector-class">.wrap</span>, <span class="hljs-selector-class">.grid</span> &#123; <span class="hljs-attribute">width</span>: <span class="hljs-number">600px</span>; <span class="hljs-attribute">gap</span>: <span class="hljs-number">16px</span>; <span class="hljs-attribute">margin-bottom</span>: <span class="hljs-number">16px</span>; &#125;</span><br><span class="language-css"></span><br><span class="language-css">  <span class="hljs-comment">/* 写法一：flex-wrap */</span></span><br><span class="language-css">  <span class="hljs-selector-class">.wrap</span> &#123; <span class="hljs-attribute">display</span>: flex; <span class="hljs-attribute">flex-wrap</span>: wrap; &#125;</span><br><span class="language-css">  <span class="hljs-selector-class">.wrap</span> &gt; <span class="hljs-selector-tag">div</span> &#123; <span class="hljs-attribute">flex</span>: <span class="hljs-number">1</span> <span class="hljs-number">1</span> <span class="hljs-number">160px</span>; <span class="hljs-attribute">background</span>: <span class="hljs-number">#cfe</span>; <span class="hljs-attribute">padding</span>: <span class="hljs-number">24px</span> <span class="hljs-number">0</span>; <span class="hljs-attribute">text-align</span>: center; &#125;</span><br><span class="language-css"></span><br><span class="language-css">  <span class="hljs-comment">/* 写法二：grid auto-fill */</span></span><br><span class="language-css">  <span class="hljs-selector-class">.grid</span> &#123; <span class="hljs-attribute">display</span>: grid; <span class="hljs-attribute">grid-template-columns</span>: <span class="hljs-built_in">repeat</span>(auto-fill, <span class="hljs-built_in">minmax</span>(<span class="hljs-number">160px</span>, <span class="hljs-number">1</span>fr)); &#125;</span><br><span class="language-css">  <span class="hljs-selector-class">.grid</span> &gt; <span class="hljs-selector-tag">div</span> &#123; <span class="hljs-attribute">background</span>: <span class="hljs-number">#fec</span>; <span class="hljs-attribute">padding</span>: <span class="hljs-number">24px</span> <span class="hljs-number">0</span>; <span class="hljs-attribute">text-align</span>: center; &#125;</span><br><span class="language-css"></span><span class="hljs-tag">&lt;/<span class="hljs-name">style</span>&gt;</span><br><br><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;wrap&quot;</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>1<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>2<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>3<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>4<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>5<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;grid&quot;</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>1<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>2<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>3<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>4<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>5<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br></code></pre></td></tr></table></figure>
+
+<p>同样是 5 个卡片、每行 3 个：flex 版<strong>每一行独立分配</strong>剩余空间，第一行 3 个各约 189px，最后一行 2 个各 292px——列完全对不上。grid 版所有轨道全局统一，最后一行只是留了一个空轨道，列宽和上面严格一致。</p>
+<p>这就是「卡片列表选 grid 而不是 flex-wrap」的根本原因：<strong>flex 的分配单位是行，grid 的分配单位是整个容器</strong>。</p>
+<h3 id="auto-fill-vs-auto-fit"><a href="#auto-fill-vs-auto-fit" class="headerlink" title="auto-fill vs auto-fit"></a>auto-fill vs auto-fit</h3><p>这两个关键字只差一件事：<strong>空轨道折叠不折叠</strong>。<code>auto-fit</code> 会把没放东西的轨道折叠成 0（于是仅有的几个 item 会被拉伸占满整行），<code>auto-fill</code> 保留空轨道占位。item 数量少、希望它们撑满容器时用 <code>auto-fit</code>；做常规卡片网格、希望列宽稳定时用 <code>auto-fill</code>。item 足够多时两者表现一致。</p>
+<h3 id="页面骨架：template-areas-让结构一眼可读"><a href="#页面骨架：template-areas-让结构一眼可读" class="headerlink" title="页面骨架：template-areas 让结构一眼可读"></a>页面骨架：template-areas 让结构一眼可读</h3><p>Grid 的另一主场是页面级骨架，<code>grid-template-areas</code> 可以按「画户型图」的方式写：</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs css"><span class="hljs-selector-class">.page</span> &#123;<br>  <span class="hljs-attribute">display</span>: grid;<br>  <span class="hljs-attribute">grid-template-areas</span>:<br>    <span class="hljs-string">&quot;header header&quot;</span><br>    <span class="hljs-string">&quot;sidebar main&quot;</span><br>    <span class="hljs-string">&quot;footer footer&quot;</span>;<br>  <span class="hljs-attribute">grid-template-columns</span>: <span class="hljs-number">240px</span> <span class="hljs-number">1</span>fr;<br>  <span class="hljs-attribute">grid-template-rows</span>: auto <span class="hljs-number">1</span>fr auto;<br>  <span class="hljs-attribute">min-height</span>: <span class="hljs-number">100vh</span>;<br>&#125;<br><span class="hljs-selector-class">.page</span> &gt; <span class="hljs-selector-tag">header</span>  &#123; <span class="hljs-attribute">grid-area</span>: header; &#125;<br><span class="hljs-selector-class">.page</span> &gt; <span class="hljs-selector-tag">aside</span>   &#123; <span class="hljs-attribute">grid-area</span>: sidebar; &#125;<br><span class="hljs-selector-class">.page</span> &gt; <span class="hljs-selector-tag">main</span>    &#123; <span class="hljs-attribute">grid-area</span>: main; &#125;<br><span class="hljs-selector-class">.page</span> &gt; <span class="hljs-selector-tag">footer</span>  &#123; <span class="hljs-attribute">grid-area</span>: footer; &#125;<br></code></pre></td></tr></table></figure>
+
+<p>要把 sidebar 从左边挪到右边，改一处字符串（<code>&quot;main sidebar&quot;</code>）就够，不用动任何子元素的属性。</p>
+<h3 id="坑-4：1fr-的隐形下限（和坑-2-是亲兄弟）"><a href="#坑-4：1fr-的隐形下限（和坑-2-是亲兄弟）" class="headerlink" title="坑 4：1fr 的隐形下限（和坑 2 是亲兄弟）"></a>坑 4：1fr 的隐形下限（和坑 2 是亲兄弟）</h3><p><code>1fr</code> 展开是 <code>minmax(auto, 1fr)</code>——轨道同样<strong>压不破内容的最小宽度</strong>。一根 <code>1fr</code> 轨道里塞了长单词、长表格，整行照样被撑爆。解法和坑 2 如出一辙，只是换了写法：</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs css"><span class="hljs-comment">/* 长内容不会撑爆列的写法 */</span><br><span class="hljs-attribute">grid-template-columns</span>: <span class="hljs-built_in">minmax</span>(<span class="hljs-number">0</span>, <span class="hljs-number">1</span>fr) <span class="hljs-built_in">minmax</span>(<span class="hljs-number">0</span>, <span class="hljs-number">1</span>fr);<br></code></pre></td></tr></table></figure>
+
+<p>Flex 和 Grid 在「默认保内容、手动才让路」这件事上完全一致——理解了其中一个，另一个的「玄学」也就消失了。</p>
+<p>顺带一提 <strong>subgrid</strong>（Chrome 117+ 已支持）：子网格可以继承父网格的轨道，一张卡片网格里想让所有卡片的「标题行 &#x2F; 正文 &#x2F; 按钮」分别横向对齐，让卡片内部也用 <code>grid-template-rows: subgrid</code> 就行，不再需要 JS 去量高度。</p>
+<h2 id="三、容器查询：组件知道自己住哪了"><a href="#三、容器查询：组件知道自己住哪了" class="headerlink" title="三、容器查询：组件知道自己住哪了"></a>三、容器查询：组件知道自己住哪了</h2><p>媒体查询统治响应式十几年，但它有个结构性缺陷：<strong>它感知的是视口</strong>。组件化时代，同一个组件会被放进主区域、侧边栏、弹窗、Grid 网格——家的大小千差万别，视口却纹丝不动。</p>
+<p>容器查询三步上手：</p>
+<ol>
+<li>给「容器」声明尺寸 containment：<code>container-type: inline-size</code>（最常用，只约束行内方向）；</li>
+<li>后代组件里写 <code>@container (min-width: 400px) { … }</code>，条件针对<strong>最近的祖先容器</strong>；</li>
+<li>想要更精细，可用容器查询单位 <code>cqi</code>（容器行内宽的 1%）：<code>font-size: clamp(0.9rem, 4cqi, 1.2rem)</code>。</li>
+</ol>
+<p>一个最小 demo——<strong>同一个卡片组件，放进两个不同宽度的壳</strong>，零媒体查询：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-tag">&lt;<span class="hljs-name">style</span>&gt;</span><span class="language-css"></span><br><span class="language-css">  <span class="hljs-selector-class">.box</span> &#123; <span class="hljs-attribute">border</span>: <span class="hljs-number">1px</span> dashed <span class="hljs-number">#999</span>; <span class="hljs-attribute">margin-bottom</span>: <span class="hljs-number">12px</span>; &#125;</span><br><span class="language-css">  <span class="hljs-selector-class">.narrow</span> &#123; <span class="hljs-attribute">width</span>: <span class="hljs-number">240px</span>; &#125;</span><br><span class="language-css">  <span class="hljs-selector-class">.wide</span>   &#123; <span class="hljs-attribute">width</span>: <span class="hljs-number">520px</span>; &#125;</span><br><span class="language-css"></span><br><span class="language-css">  <span class="hljs-selector-class">.card</span> &#123;</span><br><span class="language-css">    <span class="hljs-attribute">container-type</span>: inline-size;   <span class="hljs-comment">/* 卡片自己是容器 */</span></span><br><span class="language-css">    <span class="hljs-attribute">display</span>: flex;</span><br><span class="language-css">    <span class="hljs-attribute">flex-direction</span>: column;        <span class="hljs-comment">/* 默认（家窄）：竖排 */</span></span><br><span class="language-css">    <span class="hljs-attribute">gap</span>: <span class="hljs-number">12px</span>;</span><br><span class="language-css">    <span class="hljs-attribute">padding</span>: <span class="hljs-number">12px</span>;</span><br><span class="language-css">    <span class="hljs-attribute">border</span>: <span class="hljs-number">1px</span> solid <span class="hljs-number">#ddd</span>;</span><br><span class="language-css">  &#125;</span><br><span class="language-css">  <span class="hljs-selector-class">.thumb</span> &#123; <span class="hljs-attribute">background</span>: <span class="hljs-number">#ccc</span>; <span class="hljs-attribute">aspect-ratio</span>: <span class="hljs-number">16</span> / <span class="hljs-number">9</span>; &#125;</span><br><span class="language-css"></span><br><span class="language-css">  <span class="hljs-keyword">@container</span> (<span class="hljs-attribute">min-width</span>: <span class="hljs-number">400px</span>) &#123;  <span class="hljs-comment">/* 家够宽：横排 */</span></span><br><span class="language-css">    <span class="hljs-selector-class">.card</span> &#123; <span class="hljs-attribute">flex-direction</span>: row; <span class="hljs-attribute">align-items</span>: center; &#125;</span><br><span class="language-css">    <span class="hljs-selector-class">.thumb</span> &#123; <span class="hljs-attribute">width</span>: <span class="hljs-number">180px</span>; <span class="hljs-attribute">flex</span>: none; <span class="hljs-attribute">aspect-ratio</span>: <span class="hljs-number">1</span>; &#125;</span><br><span class="language-css">  &#125;</span><br><span class="language-css"></span><span class="hljs-tag">&lt;/<span class="hljs-name">style</span>&gt;</span><br><br><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;box narrow&quot;</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;card&quot;</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;thumb&quot;</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>标题：容器查询让组件自己适配环境<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br>  <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><br><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;box wide&quot;</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;card&quot;</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;thumb&quot;</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>标题：容器查询让组件自己适配环境<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br>  <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br></code></pre></td></tr></table></figure>
+
+<p>窄壳里竖排、宽壳里横排——组件的响应式逻辑从「页面」下沉到了「组件」，从此组件在哪里都能活。</p>
+<p>它和第二节的 auto-fill 网格是天然搭档：网格负责「每列多宽」，容器查询负责「落在这列里的卡片长什么样」，整条链路没有一个媒体查询。</p>
+<h3 id="注意点：inline-size-containment-有代价"><a href="#注意点：inline-size-containment-有代价" class="headerlink" title="注意点：inline-size containment 有代价"></a>注意点：inline-size containment 有代价</h3><p><code>container-type: inline-size</code> 意味着<strong>容器自身的宽度不能再由内容撑开</strong>，必须由外部（父级、自身 width 或 Grid&#x2F;Flex 分配）决定。把一个原本 <code>fit-content</code> 的元素设成容器，它可能突然「塌」了——这是容器查询最高频的意外。记住：先有确定的家，家才可被查询。</p>
+<p>兼容性上，Chrome&#x2F;Edge 105+、Safari 16+、Firefox 110+（2023 年起全绿），2026 年可以放心用于生产。</p>
+<h2 id="四、选型总结"><a href="#四、选型总结" class="headerlink" title="四、选型总结"></a>四、选型总结</h2><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>首选</th>
+<th>一句话理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>导航 &#x2F; 工具栏（一行，部分定宽部分伸缩）</td>
+<td>Flex</td>
+<td>一维分配，<code>margin: auto</code> 吸剩余空间</td>
+</tr>
+<tr>
+<td>图标 + 文字之类的小型行内结构</td>
+<td>Flex</td>
+<td>最短路径</td>
+</tr>
+<tr>
+<td>卡片 &#x2F; 商品网格（多行多列，要求列对齐）</td>
+<td>Grid</td>
+<td>轨道全局统一，最后一行不变形</td>
+</tr>
+<tr>
+<td>页面骨架（页头 &#x2F; 侧栏 &#x2F; 主区 &#x2F; 页脚）</td>
+<td>Grid</td>
+<td><code>template-areas</code> 结构即代码</td>
+</tr>
+<tr>
+<td>表单行（label 定宽，输入框占满）</td>
+<td>Flex</td>
+<td>定宽 + <code>flex: 1</code> 的标准组合</td>
+</tr>
+<tr>
+<td>组件要适配所在容器而非视口</td>
+<td>容器查询</td>
+<td>响应式下沉到组件</td>
+</tr>
+</tbody></table>
+<p>顺带几条面试速答（都是上面的结论压缩版）：</p>
+<ul>
+<li><strong><code>flex: 1</code> 展开是什么？</strong> <code>1 1 0%</code>——basis 归零所以严格等分；不等分的是 <code>flex: auto</code>（basis 为内容宽）。</li>
+<li><strong>为什么 flex 里加 <code>overflow: hidden</code> 能修溢出？</strong> overflow 非 visible 时，最小宽度限制（<code>min-width: auto</code>）归零，等价于 <code>min-width: 0</code>。</li>
+<li><strong><code>1fr</code> 的最小值是多少？</strong> <code>auto</code>（内容最小宽）；防撑爆要写 <code>minmax(0, 1fr)</code>。</li>
+<li><strong>auto-fill 和 auto-fit 的区别？</strong> 空轨道是否折叠；item 少且要撑满用 auto-fit。</li>
+<li><strong>容器查询和媒体查询的本质区别？</strong> 感知对象不同：视口 vs 最近祖先容器。</li>
+</ul>
+<p><strong>一句话记住</strong>：Flex 从内容出发往外分空间，Grid 从轨道出发往里放内容，容器查询让组件不再看视口脸色——三者是三层抽象，按「分空间、画格子、认环境」各取所长。</p>
+<!-- ## 参考
+
+- [MDN：Flexbox 基本概念](https://developer.mozilla.org/zh-CN/docs/Web/CSS/CSS_flexible_box_layout/Basic_concepts_of_flexbox)
+- [CSS-Tricks: A Complete Guide to Flexbox](https://css-tricks.com/snippets/css/a-guide-to-flexbox/)
+- [MDN：Grid 布局基本概念](https://developer.mozilla.org/zh-CN/docs/Web/CSS/CSS_grid_layout/Basic_concepts_of_grid_layout)
+- [CSS-Tricks: A Complete Guide to CSS Grid](https://css-tricks.com/snippets/css/complete-guide-grid/)
+- [web.dev: Learn CSS — Layout](https://web.dev/learn/css/layout)（content-out / layout-in 的出处）
+- [web.dev: CSS Container Queries](https://web.dev/articles/css-container-queries)
+- 规范：[CSS Flexbox 1](https://www.w3.org/TR/css-flexbox-1/) / [CSS Grid 2](https://www.w3.org/TR/css-grid-2/) / [CSS Containment 3](https://www.w3.org/TR/css-contain-3/) -->
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io">眉眼如初、</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io/2026/09/09/css-modern-layout/">https://stellacode98.github.io/2026/09/09/css-modern-layout/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://stellacode98.github.io" target="_blank">眉眼如初、</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/css/">css</a><a class="post-meta__tags" href="/tags/flex/">flex</a><a class="post-meta__tags" href="/tags/grid/">grid</a><a class="post-meta__tags" href="/tags/%E5%AE%B9%E5%99%A8%E6%9F%A5%E8%AF%A2/">容器查询</a></div><div class="post-share"><div class="social-share" data-image="/img/avatar.jpg" data-sites="wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2026/09/09/ai-from-streaming/" title="前端工程师的 AI 入门：从流式接口到落地一个 AI 应用"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">前端工程师的 AI 入门：从流式接口到落地一个 AI 应用</div></div><div class="info-2"><div class="info-item-1"> 这篇文章不是概念科普，而是一次真实的落地复盘。最近我在自己的 Vue3 后台管理项目（vue3_admin）里完整实现了一个 AI 智能问答模块：支持 SSE 流式打字机输出、多轮对话记忆、Function Calling 工具调用、可视化组件渲染、会话持久化。本文把这条链路从头到尾拆开讲——为什么需要流式、前端怎么手写 SSE 解析器、Function Calling 的两轮循环到底转了什么、以及从 demo 到可用应用之间隔着哪些工程细节。所有代码都来自这个真实模块，文末附完整文件地图。  目录 0. 前言：前端工程师离 AI 应用有多远 1. 认识流式接口：AI 的回复为什么是”蹦”出来的 2. 服务端：把模型的流转发给浏览器 3. 前端：手写一个 SSE 解析器 4. 从”流”到”聊天界面”：状态编排层 5. 让 AI 用上你的函数：Function Calling 6. 落地成应用：demo 和工程之间隔着什么 7. 展望：MCP 离我们还有多远 8. 写在最后   0. 前言：前端工程师离 AI 应用有多远打开 ChatGPT 或者任何 AI 对话产品，仔细观察它的...</div></div></div></a></nav></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">眉眼如初、</div><div class="author-info-description">记录前端学习与开发中的思考</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">16</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">68</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">13</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/kxl-823"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/kxl-823" target="_blank" title="GitHub"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">欢迎来到我的小站，这里记录我的学习笔记与实践心得</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81Flex%EF%BC%9A%E4%B8%80%E7%BB%B4%E7%A9%BA%E9%97%B4%E5%88%86%E9%85%8D%E5%99%A8"><span class="toc-number">1.</span> <span class="toc-text">一、Flex：一维空间分配器</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9D%91-1%EF%BC%9A%E4%BB%A5%E4%B8%BA-flex-1-%E5%92%8C-flex-auto-%E7%AD%89%E4%BB%B7"><span class="toc-number">1.1.</span> <span class="toc-text">坑 1：以为 flex: 1 和 flex: auto 等价</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9D%91-2%EF%BC%9Amin-width-auto-%E2%80%94%E2%80%94-flex-%E9%87%8C%E6%9C%80%E7%BB%8F%E5%85%B8%E7%9A%84%E3%80%8C%E6%96%87%E5%AD%97%E5%8E%8B%E4%B8%8D%E5%8A%A8%E3%80%8D"><span class="toc-number">1.2.</span> <span class="toc-text">坑 2：min-width: auto —— flex 里最经典的「文字压不动」</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%80%E4%B8%AA%E8%A2%AB%E4%BD%8E%E4%BC%B0%E7%9A%84%E6%8A%80%E5%B7%A7%EF%BC%9Amargin-auto"><span class="toc-number">1.3.</span> <span class="toc-text">一个被低估的技巧：margin: auto</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81Grid%EF%BC%9A%E5%85%88%E7%94%BB%E6%A0%BC%E5%AD%90%EF%BC%8C%E5%86%8D%E6%94%BE%E4%B8%9C%E8%A5%BF"><span class="toc-number">2.</span> <span class="toc-text">二、Grid：先画格子，再放东西</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%80%E8%A1%8C%E4%BB%A3%E7%A0%81%E7%9A%84%E5%93%8D%E5%BA%94%E5%BC%8F%E7%BD%91%E6%A0%BC"><span class="toc-number">2.1.</span> <span class="toc-text">一行代码的响应式网格</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9D%91-3%EF%BC%9Aflex-wrap-%E7%9A%84%E6%9C%80%E5%90%8E%E4%B8%80%E8%A1%8C%E9%97%AE%E9%A2%98"><span class="toc-number">2.2.</span> <span class="toc-text">坑 3：flex-wrap 的最后一行问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#auto-fill-vs-auto-fit"><span class="toc-number">2.3.</span> <span class="toc-text">auto-fill vs auto-fit</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%A1%B5%E9%9D%A2%E9%AA%A8%E6%9E%B6%EF%BC%9Atemplate-areas-%E8%AE%A9%E7%BB%93%E6%9E%84%E4%B8%80%E7%9C%BC%E5%8F%AF%E8%AF%BB"><span class="toc-number">2.4.</span> <span class="toc-text">页面骨架：template-areas 让结构一眼可读</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9D%91-4%EF%BC%9A1fr-%E7%9A%84%E9%9A%90%E5%BD%A2%E4%B8%8B%E9%99%90%EF%BC%88%E5%92%8C%E5%9D%91-2-%E6%98%AF%E4%BA%B2%E5%85%84%E5%BC%9F%EF%BC%89"><span class="toc-number">2.5.</span> <span class="toc-text">坑 4：1fr 的隐形下限（和坑 2 是亲兄弟）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E5%AE%B9%E5%99%A8%E6%9F%A5%E8%AF%A2%EF%BC%9A%E7%BB%84%E4%BB%B6%E7%9F%A5%E9%81%93%E8%87%AA%E5%B7%B1%E4%BD%8F%E5%93%AA%E4%BA%86"><span class="toc-number">3.</span> <span class="toc-text">三、容器查询：组件知道自己住哪了</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B3%A8%E6%84%8F%E7%82%B9%EF%BC%9Ainline-size-containment-%E6%9C%89%E4%BB%A3%E4%BB%B7"><span class="toc-number">3.1.</span> <span class="toc-text">注意点：inline-size containment 有代价</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E9%80%89%E5%9E%8B%E6%80%BB%E7%BB%93"><span class="toc-number">4.</span> <span class="toc-text">四、选型总结</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/miniprogram-performance/" title="小程序性能优化实战清单：分包、骨架屏、长列表">小程序性能优化实战清单：分包、骨架屏、长列表</a><time datetime="2026-09-09T15:10:00.000Z" title="发表于 2026-09-09 23:10:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/webpack-performance/" title="Webpack 性能优化速查：构建速度与产物体积，一张表讲完">Webpack 性能优化速查：构建速度与产物体积，一张表讲完</a><time datetime="2026-09-09T14:30:00.000Z" title="发表于 2026-09-09 22:30:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/element-plus-table-component/" title="封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟">封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟</a><time datetime="2026-09-09T13:30:00.000Z" title="发表于 2026-09-09 21:30:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/front-end-permission/" title="前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？">前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？</a><time datetime="2026-09-09T13:30:00.000Z" title="发表于 2026-09-09 21:30:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/data-platform-data-loading/" title="数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取">数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取</a><time datetime="2026-09-09T13:00:00.000Z" title="发表于 2026-09-09 21:00:00">2026-09-09</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By 眉眼如初、</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.2</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.7.0</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><div class="js-pjax"></div><video id="site-video" src="/video/gufeng-snow.mp4" poster="/img/gufeng-girl.webp" autoplay loop muted playsinline disablepictureinpicture></video><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></div></body></html>

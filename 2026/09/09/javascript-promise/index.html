@@ -1,0 +1,375 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>Promise 全景：从回调地狱、状态机到微任务与链式调用 | 眉眼如初、</title><meta name="author" content="眉眼如初、"><meta name="copyright" content="眉眼如初、"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="Promise 不只是解决回调地狱的 API，而是一套「异步结果管理 + 后续任务组合」的抽象：状态机保存结果，then 注册后续并返回新 Promise 形成链，微任务决定执行时机。本文从状态机、执行时机、链式规则讲到组合 API 与 async&#x2F;await。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Promise 全景：从回调地狱、状态机到微任务与链式调用">
+<meta property="og:url" content="https://stellacode98.github.io/2026/09/09/javascript-promise/index.html">
+<meta property="og:site_name" content="眉眼如初、">
+<meta property="og:description" content="Promise 不只是解决回调地狱的 API，而是一套「异步结果管理 + 后续任务组合」的抽象：状态机保存结果，then 注册后续并返回新 Promise 形成链，微任务决定执行时机。本文从状态机、执行时机、链式规则讲到组合 API 与 async&#x2F;await。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://stellacode98.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-09-09T07:30:00.000Z">
+<meta property="article:modified_time" content="2026-09-09T12:48:53.691Z">
+<meta property="article:author" content="眉眼如初、">
+<meta property="article:tag" content="Event Loop">
+<meta property="article:tag" content="Promise">
+<meta property="article:tag" content="async&#x2F;await">
+<meta property="article:tag" content="javascript">
+<meta property="article:tag" content="异步">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://stellacode98.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Promise 全景：从回调地狱、状态机到微任务与链式调用",
+  "url": "https://stellacode98.github.io/2026/09/09/javascript-promise/",
+  "image": "https://stellacode98.github.io/img/avatar.jpg",
+  "datePublished": "2026-09-09T07:30:00.000Z",
+  "dateModified": "2026-09-09T12:48:53.691Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "眉眼如初、",
+      "url": "https://stellacode98.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.ico"><link rel="canonical" href="https://stellacode98.github.io/2026/09/09/javascript-promise/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'Promise 全景：从回调地狱、状态机到微任务与链式调用',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/bg-video.css"><meta name="generator" content="Hexo 8.1.2"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">16</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">68</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">13</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/gufeng-girl.webp);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">眉眼如初、</span></a><a class="nav-page-title" href="/"><span class="site-name">Promise 全景：从回调地狱、状态机到微任务与链式调用</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">Promise 全景：从回调地狱、状态机到微任务与链式调用</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-09T07:30:00.000Z" title="发表于 2026-09-09 15:30:00">2026-09-09</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-09T12:48:53.691Z" title="更新于 2026-09-09 20:48:53">2026-09-09</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%89%8D%E7%AB%AF%E5%9F%BA%E7%A1%80/">前端基础</a><i class="fas fa-angle-right post-meta-separator"></i><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%89%8D%E7%AB%AF%E5%9F%BA%E7%A1%80/javascript/">javascript</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p>我以前对 Promise 的理解就一句话：<strong>解决回调地狱的。</strong> 这话没错，但远远不够——直到被一连串问题问住：</p>
+<ul>
+<li><code>new Promise()</code> 里的代码为什么是<strong>同步执行</strong>的？</li>
+<li>明明已经 resolve 了，<code>.then()</code> 为什么还是不立即跑？</li>
+<li><code>then</code> 里 <code>return 123</code>，下一个 <code>then</code> 怎么就拿到了 <code>123</code>？<code>throw</code> 的错为什么后面的 <code>catch</code> 接得住？</li>
+<li><code>async/await</code> 和 Promise 到底什么关系？</li>
+</ul>
+<p>后来才想明白，Promise 本质是一套抽象：</p>
+<blockquote>
+<p><strong>用状态机表示「未来才产生的结果」，用 then &#x2F; catch &#x2F; finally 描述后续处理，用链式 Promise 传递值与错误，再交给微任务机制调度执行。</strong></p>
+</blockquote>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs text">Promise<br>├── 状态管理    pending → fulfilled / rejected<br>├── 结果传递    resolve(value) / reject(reason)<br>├── 后续处理    then / catch / finally<br>├── 链式调用    then 返回新 Promise<br>├── 任务调度    reaction → 微任务<br>└── 组合能力    all / allSettled / race / any<br></code></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<h2 id="一、从回调地狱说起：Promise-是「未来结果的容器」"><a href="#一、从回调地狱说起：Promise-是「未来结果的容器」" class="headerlink" title="一、从回调地狱说起：Promise 是「未来结果的容器」"></a>一、从回调地狱说起：Promise 是「未来结果的容器」</h2><p>回调时代把三个串行请求连起来，缩进和错误处理一起失控：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-title function_">getUser</span>(<span class="hljs-function">(<span class="hljs-params">user</span>) =&gt;</span> &#123;<br>  <span class="hljs-title function_">getUserDetail</span>(user.<span class="hljs-property">id</span>, <span class="hljs-function">(<span class="hljs-params">detail</span>) =&gt;</span> &#123;<br>    <span class="hljs-title function_">getOrders</span>(detail.<span class="hljs-property">id</span>, <span class="hljs-function">(<span class="hljs-params">orders</span>) =&gt;</span> &#123;<br>      <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(orders);   <span class="hljs-comment">// 想统一处理错误？每层都要写一遍</span><br>    &#125;);<br>  &#125;);<br>&#125;);<br></code></pre></td></tr></table></figure>
+
+<p>Promise 的解法：<strong>把「未来会得到的结果」封装成一个对象</strong>。<code>fetch(&#39;/api/user&#39;)</code> 立刻返回一个 promise——现在还没有结果，未来要么 fulfilled（用户数据）、要么 rejected（错误原因）。此后的所有问题，都变成「怎么管理这个对象」。</p>
+<h2 id="二、状态机：Promise-的核心不是-then，是状态"><a href="#二、状态机：Promise-的核心不是-then，是状态" class="headerlink" title="二、状态机：Promise 的核心不是 then，是状态"></a>二、状态机：Promise 的核心不是 then，是状态</h2><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs text">pending ──resolve──► fulfilled（保存 value）<br>   │<br>   └──reject───────► rejected（保存 reason）<br></code></pre></td></tr></table></figure>
+
+<p>最重要的一条规则：<strong>状态只能从 pending 变一次，之后不可逆</strong>：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">new</span> <span class="hljs-title class_">Promise</span>(<span class="hljs-function">(<span class="hljs-params">resolve, reject</span>) =&gt;</span> &#123;<br>  <span class="hljs-title function_">resolve</span>(<span class="hljs-string">&#x27;A&#x27;</span>);<br>  <span class="hljs-title function_">resolve</span>(<span class="hljs-string">&#x27;B&#x27;</span>);   <span class="hljs-comment">// 无效：状态已定格</span><br>  <span class="hljs-title function_">reject</span>(<span class="hljs-string">&#x27;C&#x27;</span>);    <span class="hljs-comment">// 无效</span><br>&#125;);<br><span class="hljs-comment">// 最终：fulfilled，value = &#x27;A&#x27;</span><br></code></pre></td></tr></table></figure>
+
+<p>而 <code>resolve</code> &#x2F; <code>reject</code> 做的事是完整的一条链：<strong>改变状态 → 保存结果 → 触发已注册的 reactions → 把它们排进微任务队列</strong>。最后一步，就是「then 为什么是异步的」的答案。</p>
+<h2 id="三、执行时机：executor-同步，then-是微任务"><a href="#三、执行时机：executor-同步，then-是微任务" class="headerlink" title="三、执行时机：executor 同步，then 是微任务"></a>三、执行时机：executor 同步，then 是微任务</h2><p>Promise 最容易误解的地方——「哪部分是异步的」：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;1&#x27;</span>);<br><span class="hljs-keyword">new</span> <span class="hljs-title class_">Promise</span>(<span class="hljs-function">(<span class="hljs-params">resolve</span>) =&gt;</span> &#123;<br>  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;2&#x27;</span>);                    <span class="hljs-comment">// executor：同步执行</span><br>  <span class="hljs-title function_">resolve</span>(<span class="hljs-string">&#x27;ok&#x27;</span>);<br>&#125;).<span class="hljs-title function_">then</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;3&#x27;</span>));       <span class="hljs-comment">// 回调：进微任务队列</span><br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;4&#x27;</span>);<br><br><span class="hljs-comment">// 输出：1 → 2 → 4 → 3</span><br></code></pre></td></tr></table></figure>
+
+<p><strong>executor 是同步执行的</strong>，不会因为写在 <code>new Promise</code> 里就变异步；真正异步的是 <code>then</code> 的回调——即使 Promise 已经 settled，回调也要等当前同步代码跑完、轮到微任务时才执行。加上 setTimeout 就凑成经典面试题：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;1&#x27;</span>);<br><span class="hljs-built_in">setTimeout</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;2&#x27;</span>), <span class="hljs-number">0</span>);           <span class="hljs-comment">// 宏任务</span><br><span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">resolve</span>().<span class="hljs-title function_">then</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;3&#x27;</span>));  <span class="hljs-comment">// 微任务</span><br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;4&#x27;</span>);<br><br><span class="hljs-comment">// 输出：1 → 4 → 3 → 2（微任务在当前任务后清空，宏任务等下一轮）</span><br></code></pre></td></tr></table></figure>
+
+<h2 id="四、链式调用：then-永远返回一个新-Promise"><a href="#四、链式调用：then-永远返回一个新-Promise" class="headerlink" title="四、链式调用：then 永远返回一个新 Promise"></a>四、链式调用：then 永远返回一个新 Promise</h2><p>链式调用的基础：<code>then</code> 同时做两件事——注册当前 Promise 的后续处理，<strong>创建并返回一个新的 Promise</strong>。所以 <code>.then().then()</code> 连的从来不是同一个对象。新 Promise 的状态由回调的返回值决定，规则只有三条：</p>
+<table>
+<thead>
+<tr>
+<th>then 回调里</th>
+<th>新 Promise</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>return 123</code>（普通值）</td>
+<td>fulfilled，value &#x3D; 123（≈ <code>Promise.resolve(123)</code>）</td>
+</tr>
+<tr>
+<td><code>return promise2</code></td>
+<td>等待并跟随 promise2 的状态</td>
+</tr>
+<tr>
+<td><code>throw new Error()</code></td>
+<td>rejected，reason &#x3D; 该错误</td>
+</tr>
+</tbody></table>
+<p>两个高频推论：</p>
+<ul>
+<li><strong>值穿透</strong>：<code>.then()</code> 不传回调时值不会被吃掉，<code>Promise.resolve(100).then().then(v =&gt; v)</code> 一路传到底——空 then 等价于 <code>v =&gt; v</code>；</li>
+<li><strong>错误沿链传播</strong>：链中某一步 rejected 后，中间没有 onRejected 的 then 全部跳过，错误一路传到最近的 <code>.catch</code>。<code>catch</code> 就是 <code>then(undefined, onRejected)</code> 的语法糖——工程上推荐 <code>then / catch / finally</code> 分开写而不是用 then 的第二个参数，因为前者能兜住整条链。</li>
+</ul>
+<p><code>finally</code> 无论成败都执行且不改变值，典型用途是关 loading：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-title function_">showLoading</span>();<br><span class="hljs-title function_">fetch</span>(<span class="hljs-string">&#x27;/api/user&#x27;</span>)<br>  .<span class="hljs-title function_">then</span>(<span class="hljs-function">(<span class="hljs-params">res</span>) =&gt;</span> res.<span class="hljs-title function_">json</span>())<br>  .<span class="hljs-title function_">catch</span>(<span class="hljs-variable language_">console</span>.<span class="hljs-property">error</span>)<br>  .<span class="hljs-title function_">finally</span>(hideLoading);   <span class="hljs-comment">// 成败都走到</span><br></code></pre></td></tr></table></figure>
+
+<h2 id="五、微任务：Promise-和-Event-Loop-的分工"><a href="#五、微任务：Promise-和-Event-Loop-的分工" class="headerlink" title="五、微任务：Promise 和 Event Loop 的分工"></a>五、微任务：Promise 和 Event Loop 的分工</h2><p>Promise 本身不是事件循环。分工是：<strong>Promise 负责状态、结果和 reactions；宿主的事件循环负责什么时候执行它们</strong>——reaction 被排进微任务队列，每个宏任务结束后清空。</p>
+<p>一个容易忽视的细节：链上的 then 是<strong>逐个</strong>入队的——第一个 then 的回调执行完、它返回的新 Promise settled 后，第二个 then 的回调才入队：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">resolve</span>().<span class="hljs-title function_">then</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-number">1</span>)).<span class="hljs-title function_">then</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-number">2</span>));<br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-number">3</span>);<br><br><span class="hljs-comment">// 输出：3 → 1 → 2</span><br><span class="hljs-comment">// 同步打印 3 → 微任务 1 打印 1，第二个回调此时才入队 → 微任务 2 打印 2</span><br></code></pre></td></tr></table></figure>
+
+<p>所以链上每个 then 各占一个微任务位——「微任务清空过程中新入队的也要清」这条事件循环规则，日常来源就是它。</p>
+<h2 id="六、组合-API：批量管理多个-Promise"><a href="#六、组合-API：批量管理多个-Promise" class="headerlink" title="六、组合 API：批量管理多个 Promise"></a>六、组合 API：批量管理多个 Promise</h2><p>先看它们解决的真实问题。三个互不依赖的请求串行 await，总耗时是三者之和；<code>Promise.all</code> 并发发起，总耗时约等于最慢的那个：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-comment">// 串行：T = T1 + T2 + T3</span><br><span class="hljs-keyword">const</span> user = <span class="hljs-keyword">await</span> <span class="hljs-title function_">getUser</span>();<br><span class="hljs-keyword">const</span> goods = <span class="hljs-keyword">await</span> <span class="hljs-title function_">getGoods</span>();<br><span class="hljs-keyword">const</span> orders = <span class="hljs-keyword">await</span> <span class="hljs-title function_">getOrders</span>();<br><br><span class="hljs-comment">// 并发：T = max(T1, T2, T3)</span><br><span class="hljs-keyword">const</span> [user, goods, orders] = <span class="hljs-keyword">await</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">all</span>([<span class="hljs-title function_">getUser</span>(), <span class="hljs-title function_">getGoods</span>(), <span class="hljs-title function_">getOrders</span>()]);<br></code></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>API</th>
+<th>成功条件</th>
+<th>失败条件</th>
+<th>典型场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Promise.all</code></td>
+<td>全部 fulfilled</td>
+<td>任意一个 rejected</td>
+<td>并发请求</td>
+</tr>
+<tr>
+<td><code>Promise.allSettled</code></td>
+<td>全部结束即 resolve</td>
+<td>永不因单个失败 reject</td>
+<td>批量任务要逐个结果</td>
+</tr>
+<tr>
+<td><code>Promise.race</code></td>
+<td>第一个 settle 的定结果</td>
+<td>同左</td>
+<td>请求超时控制</td>
+</tr>
+<tr>
+<td><code>Promise.any</code></td>
+<td>第一个 fulfilled</td>
+<td>全部 rejected</td>
+<td>多源容灾取最快成功</td>
+</tr>
+</tbody></table>
+<p>三个细节常被问：</p>
+<ol>
+<li><code>all</code> 的结果<strong>按输入顺序</strong>排列，不是完成顺序——B 先回来也排在第二位；</li>
+<li><code>all</code> 一个失败立即 rejected，但<strong>不会自动取消</strong>其他已发出的请求——要取消得配 <code>AbortController</code>；</li>
+<li><code>race</code> 同样只是「取先到的结果」，不会取消落败者。</li>
+</ol>
+<h2 id="七、async-await：Promise-之上的语法糖"><a href="#七、async-await：Promise-之上的语法糖" class="headerlink" title="七、async&#x2F;await：Promise 之上的语法糖"></a>七、async&#x2F;await：Promise 之上的语法糖</h2><p>async&#x2F;await 不是 Promise 的替代品，而是<strong>建立在 Promise 之上的语法机制</strong>。两条核心规则，一个例子全占了：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">foo</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;A&#x27;</span>);<br>  <span class="hljs-keyword">await</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">resolve</span>();<br>  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;B&#x27;</span>);   <span class="hljs-comment">// ≈ 写在 then 里的代码</span><br>&#125;<br><span class="hljs-title function_">foo</span>();<br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;C&#x27;</span>);<br><br><span class="hljs-comment">// 输出：A → C → B</span><br></code></pre></td></tr></table></figure>
+
+<ol>
+<li><strong>async 函数一定返回 Promise</strong>：<code>return 123</code> 会被包装成 <code>Promise.resolve(123)</code>；</li>
+<li><strong>await 暂停的是当前 async 函数，不是 JS 线程</strong>：函数在 await 处让出，把后面的代码当作「await 值的 then 回调」排进微任务，调用处继续同步执行——所以 B 在 C 之后。</li>
+</ol>
+<p>串行陷阱也出自这里：循环里逐个 <code>await</code> 是串行，要并发就先 <code>Promise.all</code> 再取值。</p>
+<h2 id="八、手写-Promise：骨架与真正的难点"><a href="#八、手写-Promise：骨架与真正的难点" class="headerlink" title="八、手写 Promise：骨架与真正的难点"></a>八、手写 Promise：骨架与真正的难点</h2><p>手写是检验理解的最好方式。内部最少需要这些：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">class</span> <span class="hljs-title class_">MyPromise</span> &#123;<br>  <span class="hljs-title function_">constructor</span>(<span class="hljs-params">executor</span>) &#123;<br>    <span class="hljs-variable language_">this</span>.<span class="hljs-property">status</span> = <span class="hljs-string">&#x27;pending&#x27;</span>;<br>    <span class="hljs-variable language_">this</span>.<span class="hljs-property">value</span> = <span class="hljs-literal">undefined</span>;    <span class="hljs-comment">// fulfilled 时保存结果</span><br>    <span class="hljs-variable language_">this</span>.<span class="hljs-property">reason</span> = <span class="hljs-literal">undefined</span>;   <span class="hljs-comment">// rejected 时保存原因</span><br>    <span class="hljs-variable language_">this</span>.<span class="hljs-property">callbacks</span> = [];       <span class="hljs-comment">// pending 期 then 注册的回调，先存起来</span><br>    <span class="hljs-comment">// executor 同步执行；resolve/reject 里：改状态、存结果、依次异步触发 callbacks</span><br>  &#125;<br>  <span class="hljs-title function_">then</span>(<span class="hljs-params">onFulfilled, onRejected</span>) &#123; <span class="hljs-comment">/* 返回新 Promise，难点见下 */</span> &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>为什么需要 callbacks 数组：<code>p.then(f1); p.then(f2);</code> 在 pending 期注册的回调，要等 <code>resolve</code> 时再依次触发。</p>
+<p>真正的难点不在状态机，而在 <strong>then 的返回值解析</strong>（规范叫 Promise Resolution Procedure）：回调可能 return 普通值、return 一个 Promise、return 一个 thenable（<code>{ then(resolve) {} }</code>）、甚至 throw——每种情况新 Promise 怎么变，全在这一个函数里。把这段写对，才算真懂 then 链。</p>
+<h2 id="九、常见误区速查"><a href="#九、常见误区速查" class="headerlink" title="九、常见误区速查"></a>九、常见误区速查</h2><table>
+<thead>
+<tr>
+<th>误区</th>
+<th>事实</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Promise 的代码是异步的</td>
+<td>executor 同步执行；异步的是 then 的回调</td>
+</tr>
+<tr>
+<td><code>Promise.resolve().then(fn)</code> 立即执行</td>
+<td>fn 进微任务，同步代码之后才跑</td>
+</tr>
+<tr>
+<td>Promise &#x3D; 线程 &#x2F; Web Worker</td>
+<td>只是结果抽象，干活的仍是宿主（网络、定时器……）</td>
+</tr>
+<tr>
+<td>async&#x2F;await 绕开了 Promise</td>
+<td>全部建立在 Promise 机制之上</td>
+</tr>
+<tr>
+<td><code>Promise.all</code> 失败会取消其他请求</td>
+<td>不会；取消需要 AbortController</td>
+</tr>
+</tbody></table>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>一张图收束全文：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs text">pending ──resolve──► fulfilled(value)<br>   │                    │<br>   └──reject──────► rejected(reason)<br>                        │<br>             状态改变 → reaction → 微任务 → then 回调执行<br>                        │<br>          ┌─────────────┼─────────────┐<br>      return 值      return P       throw<br>          │             │             │<br>    新 P fulfilled  等待并跟随 P   新 P rejected<br>          └─────────────┼─────────────┘<br>                     then...（链继续）<br></code></pre></td></tr></table></figure>
+
+<!-- 面试速答：
+
+- **Promise 的本质？** 表示异步操作最终结果的对象：状态机保存结果，then / catch / finally 注册后续，reaction 排进微任务执行，then 返回新 Promise 形成链。
+- **`new Promise` 里的代码同步还是异步？** 同步。异步的是 then 的回调，即使 Promise 已 settled 也要等微任务时机。
+- **then 的三种返回值规则？** 普通值 → 新 Promise fulfilled；返回 Promise → 等待并跟随；throw → rejected，错误沿链传播到最近的 catch。
+- **catch 为什么能接住前面的错？** then 回调 throw 会让它返回的新 Promise rejected，错误沿链向后传播直到遇到 onRejected；catch 就是 `then(undefined, onRejected)`。
+- **async/await 和 Promise 的关系？** 语法糖：async 函数必返回 Promise，await 后的代码等价于 then 回调，暂停的是当前函数而非线程。 -->
+
+<p><strong>一句话记住</strong>：Promise &#x3D; 状态机 + 链式传递 + 微任务调度——状态存结果，链传值与错，微任务定时机；async&#x2F;await 只是这套机制的衣服。</p>
+<!-- ## 参考资料
+
+- [ECMAScript 规范：Promise Objects](https://tc39.es/ecma262/multipage/control-abstraction-objects.html)
+- [MDN：Using Promises](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises)
+- [MDN：await](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/await)
+- [Promises/A+ 规范](https://promises-aplus.promises-spec/) -->
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io">眉眼如初、</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io/2026/09/09/javascript-promise/">https://stellacode98.github.io/2026/09/09/javascript-promise/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://stellacode98.github.io" target="_blank">眉眼如初、</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/javascript/">javascript</a><a class="post-meta__tags" href="/tags/%E5%BC%82%E6%AD%A5/">异步</a><a class="post-meta__tags" href="/tags/Promise/">Promise</a><a class="post-meta__tags" href="/tags/Event-Loop/">Event Loop</a><a class="post-meta__tags" href="/tags/async-await/">async/await</a></div><div class="post-share"><div class="social-share" data-image="/img/avatar.jpg" data-sites="wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/09/09/vue-responsive-contrast/" title="Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 Proxy"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 Proxy</div></div><div class="info-2"><div class="info-item-1">Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 ProxyVue 最核心的能力之一，就是响应式。 在使用 Vue 开发应用时，我们通常只需要修改数据： 1state.count++  页面就会自动发生变化。 开发者并不需要手动查找 DOM，再修改对应的节点。 123456789修改数据   ↓响应式系统感知变化   ↓找到依赖该数据的逻辑   ↓重新执行相关逻辑   ↓视图更新  这背后就是 Vue 响应式系统所解决的问题。 Vue2 和 Vue3 都实现了这套机制，但底层实现存在比较明显的区别： 12345678910111213Vue2Object.defineProperty        ↓   getter / setter        ↓   Dep / WatcherVue3      Proxy        ↓  track / trigger        ↓      effect  从 Vue2 到 Vue3，并不只是简单地把一个 API 换成另一个 API，而是响应式系统整体设计的一次变化。 本文从 Obje...</div></div></div></a><a class="pagination-related" href="/2026/09/09/javascript-event-loop/" title="事件循环全景：调用栈、宏任务、微任务与渲染帧"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">事件循环全景：调用栈、宏任务、微任务与渲染帧</div></div><div class="info-2"><div class="info-item-1">我对事件循环的误解持续了很多年：最早以为「setTimeout 就是开个线程」，后来背下口诀「宏先微后」，直到连翻三次车：  loading 不出现：点击 → 显示转圈 → 同步计算 300ms → 隐藏转圈。转圈从头到尾没出现过。 顺序背不动：Promise.then 和 setTimeout(fn, 0) 谁先我能背，但代码里混进一个 await，顺序立刻说不清。 Node 玄学：同一段代码里 setTimeout(fn, 0) 和 setImmediate，先跑谁居然「看机器心情」。  后来才明白，这是同一个机制的三种表现。事件循环不是 JavaScript 的特性，而是宿主环境（浏览器、Node）的调度机制——JS 引擎只负责一块调用栈，「什么时候跑哪段异步代码」由宿主说了算。   一、发动机：调用栈、任务队列与循环算法先立地基：JS 单线程，同一时刻调用栈里只有一段代码在跑，同步代码执行到栈空为止。「异步」从来不是并行，而是推迟。推迟出去的部分由宿主收着（定时器、DOM 事件、网络都不在 JS 线程上干等），时机一到，宿主把回调包装成一个任务（task，俗称宏任务）放进...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/09/09/javascript-event-loop/" title="事件循环全景：调用栈、宏任务、微任务与渲染帧"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">事件循环全景：调用栈、宏任务、微任务与渲染帧</div></div><div class="info-2"><div class="info-item-1">我对事件循环的误解持续了很多年：最早以为「setTimeout 就是开个线程」，后来背下口诀「宏先微后」，直到连翻三次车：  loading 不出现：点击 → 显示转圈 → 同步计算 300ms → 隐藏转圈。转圈从头到尾没出现过。 顺序背不动：Promise.then 和 setTimeout(fn, 0) 谁先我能背，但代码里混进一个 await，顺序立刻说不清。 Node 玄学：同一段代码里 setTimeout(fn, 0) 和 setImmediate，先跑谁居然「看机器心情」。  后来才明白，这是同一个机制的三种表现。事件循环不是 JavaScript 的特性，而是宿主环境（浏览器、Node）的调度机制——JS 引擎只负责一块调用栈，「什么时候跑哪段异步代码」由宿主说了算。   一、发动机：调用栈、任务队列与循环算法先立地基：JS 单线程，同一时刻调用栈里只有一段代码在跑，同步代码执行到栈空为止。「异步」从来不是并行，而是推迟。推迟出去的部分由宿主收着（定时器、DOM 事件、网络都不在 JS 线程上干等），时机一到，宿主把回调包装成一个任务（task，俗称宏任务）放进...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">眉眼如初、</div><div class="author-info-description">记录前端学习与开发中的思考</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">16</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">68</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">13</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/kxl-823"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/kxl-823" target="_blank" title="GitHub"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">欢迎来到我的小站，这里记录我的学习笔记与实践心得</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E4%BB%8E%E5%9B%9E%E8%B0%83%E5%9C%B0%E7%8B%B1%E8%AF%B4%E8%B5%B7%EF%BC%9APromise-%E6%98%AF%E3%80%8C%E6%9C%AA%E6%9D%A5%E7%BB%93%E6%9E%9C%E7%9A%84%E5%AE%B9%E5%99%A8%E3%80%8D"><span class="toc-number">1.</span> <span class="toc-text">一、从回调地狱说起：Promise 是「未来结果的容器」</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E7%8A%B6%E6%80%81%E6%9C%BA%EF%BC%9APromise-%E7%9A%84%E6%A0%B8%E5%BF%83%E4%B8%8D%E6%98%AF-then%EF%BC%8C%E6%98%AF%E7%8A%B6%E6%80%81"><span class="toc-number">2.</span> <span class="toc-text">二、状态机：Promise 的核心不是 then，是状态</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E6%89%A7%E8%A1%8C%E6%97%B6%E6%9C%BA%EF%BC%9Aexecutor-%E5%90%8C%E6%AD%A5%EF%BC%8Cthen-%E6%98%AF%E5%BE%AE%E4%BB%BB%E5%8A%A1"><span class="toc-number">3.</span> <span class="toc-text">三、执行时机：executor 同步，then 是微任务</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E9%93%BE%E5%BC%8F%E8%B0%83%E7%94%A8%EF%BC%9Athen-%E6%B0%B8%E8%BF%9C%E8%BF%94%E5%9B%9E%E4%B8%80%E4%B8%AA%E6%96%B0-Promise"><span class="toc-number">4.</span> <span class="toc-text">四、链式调用：then 永远返回一个新 Promise</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E5%BE%AE%E4%BB%BB%E5%8A%A1%EF%BC%9APromise-%E5%92%8C-Event-Loop-%E7%9A%84%E5%88%86%E5%B7%A5"><span class="toc-number">5.</span> <span class="toc-text">五、微任务：Promise 和 Event Loop 的分工</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E7%BB%84%E5%90%88-API%EF%BC%9A%E6%89%B9%E9%87%8F%E7%AE%A1%E7%90%86%E5%A4%9A%E4%B8%AA-Promise"><span class="toc-number">6.</span> <span class="toc-text">六、组合 API：批量管理多个 Promise</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81async-await%EF%BC%9APromise-%E4%B9%8B%E4%B8%8A%E7%9A%84%E8%AF%AD%E6%B3%95%E7%B3%96"><span class="toc-number">7.</span> <span class="toc-text">七、async&#x2F;await：Promise 之上的语法糖</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E6%89%8B%E5%86%99-Promise%EF%BC%9A%E9%AA%A8%E6%9E%B6%E4%B8%8E%E7%9C%9F%E6%AD%A3%E7%9A%84%E9%9A%BE%E7%82%B9"><span class="toc-number">8.</span> <span class="toc-text">八、手写 Promise：骨架与真正的难点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B9%9D%E3%80%81%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA%E9%80%9F%E6%9F%A5"><span class="toc-number">9.</span> <span class="toc-text">九、常见误区速查</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">10.</span> <span class="toc-text">总结</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/miniprogram-performance/" title="小程序性能优化实战清单：分包、骨架屏、长列表">小程序性能优化实战清单：分包、骨架屏、长列表</a><time datetime="2026-09-09T15:10:00.000Z" title="发表于 2026-09-09 23:10:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/webpack-performance/" title="Webpack 性能优化速查：构建速度与产物体积，一张表讲完">Webpack 性能优化速查：构建速度与产物体积，一张表讲完</a><time datetime="2026-09-09T14:30:00.000Z" title="发表于 2026-09-09 22:30:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/element-plus-table-component/" title="封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟">封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟</a><time datetime="2026-09-09T13:30:00.000Z" title="发表于 2026-09-09 21:30:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/front-end-permission/" title="前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？">前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？</a><time datetime="2026-09-09T13:30:00.000Z" title="发表于 2026-09-09 21:30:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/data-platform-data-loading/" title="数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取">数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取</a><time datetime="2026-09-09T13:00:00.000Z" title="发表于 2026-09-09 21:00:00">2026-09-09</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By 眉眼如初、</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.2</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.7.0</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><div class="js-pjax"></div><video id="site-video" src="/video/gufeng-snow.mp4" poster="/img/gufeng-girl.webp" autoplay loop muted playsinline disablepictureinpicture></video><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></div></body></html>

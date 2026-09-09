@@ -1,0 +1,463 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？ | 眉眼如初、</title><meta name="author" content="眉眼如初、"><meta name="copyright" content="眉眼如初、"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="以一个真实后台项目为例复盘前端权限体系：登录凭证与权限快照的存取、「模块:动作」权限码模型、v-auth &#x2F; v-menuAuth 双指令与 Tab 级显隐，以及最容易被误解的问题——数据权限到底该由前端还是后端负责。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？">
+<meta property="og:url" content="https://stellacode98.github.io/2026/09/09/front-end-permission/index.html">
+<meta property="og:site_name" content="眉眼如初、">
+<meta property="og:description" content="以一个真实后台项目为例复盘前端权限体系：登录凭证与权限快照的存取、「模块:动作」权限码模型、v-auth &#x2F; v-menuAuth 双指令与 Tab 级显隐，以及最容易被误解的问题——数据权限到底该由前端还是后端负责。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://stellacode98.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-09-09T13:30:00.000Z">
+<meta property="article:modified_time" content="2026-09-09T12:48:53.689Z">
+<meta property="article:author" content="眉眼如初、">
+<meta property="article:tag" content="Pinia">
+<meta property="article:tag" content="RBAC">
+<meta property="article:tag" content="Vue3">
+<meta property="article:tag" content="axios">
+<meta property="article:tag" content="权限">
+<meta property="article:tag" content="自定义指令">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://stellacode98.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？",
+  "url": "https://stellacode98.github.io/2026/09/09/front-end-permission/",
+  "image": "https://stellacode98.github.io/img/avatar.jpg",
+  "datePublished": "2026-09-09T13:30:00.000Z",
+  "dateModified": "2026-09-09T12:48:53.689Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "眉眼如初、",
+      "url": "https://stellacode98.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.ico"><link rel="canonical" href="https://stellacode98.github.io/2026/09/09/front-end-permission/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/bg-video.css"><meta name="generator" content="Hexo 8.1.2"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">16</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">68</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">13</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/gufeng-girl.webp);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">眉眼如初、</span></a><a class="nav-page-title" href="/"><span class="site-name">前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-09T13:30:00.000Z" title="发表于 2026-09-09 21:30:00">2026-09-09</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-09T12:48:53.689Z" title="更新于 2026-09-09 20:48:53">2026-09-09</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/Vue-%E8%BF%9B%E9%98%B6/">Vue 进阶</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><blockquote>
+<p>这是真实项目复盘系列的第二篇。这个 Vue3 + Vite + Pinia + Ant Design Vue 的后台系统里，权限是典型的”隐形基础设施”：平时没人注意它，直到某天测试提了个 bug——“为什么这个角色看不到导出按钮”。本文把这套权限体系完整拆开：<strong>登录凭证怎么存、权限码怎么建模、按钮和菜单怎么按权限显隐、角色权限在哪个界面配出来</strong>，以及一个几乎所有后台项目都会遇到、也最容易做错的问题——<strong>数据权限（数据范围过滤）到底放在前端还是后端</strong>。先说结论：这个项目把数据权限完全交给了后端，前端只做了功能层（菜单&#x2F;按钮）权限。为什么这样选、边界在哪，第 7 节详细展开。</p>
+</blockquote>
+<h2 id="目录"><a href="#目录" class="headerlink" title="目录"></a>目录</h2><ul>
+<li><a href="#sec0">0. 前言：前端权限到底防谁</a></li>
+<li><a href="#sec1">1. 登录与凭证：token 从哪来，权限快照存哪去</a></li>
+<li><a href="#sec2">2. 权限数据模型：两张 Map 与「模块:动作」权限码</a></li>
+<li><a href="#sec3">3. 判断核心：hasBtnAuth &#x2F; hasAuth 双函数</a></li>
+<li><a href="#sec4">4. 双指令：v-auth 与 v-menuAuth</a></li>
+<li><a href="#sec5">5. 三层显隐实战：模块入口 → Tab → 按钮</a></li>
+<li><a href="#sec6">6. 权限的配置面：角色管理与权限树</a></li>
+<li><a href="#sec7">7. 数据权限：这一层前端做了什么、该做什么</a></li>
+<li><a href="#sec8">8. 短板与改进清单</a></li>
+<li><a href="#sec9">9. 写在最后</a></li>
+</ul>
+<p><a id="sec0"></a></p>
+<h2 id="0-前言：前端权限到底防谁"><a href="#0-前言：前端权限到底防谁" class="headerlink" title="0. 前言：前端权限到底防谁"></a>0. 前言：前端权限到底防谁</h2><p>先把一个立场立住，后面所有设计才立得住：<strong>前端权限从来不是安全机制，而是体验机制</strong>。</p>
+<p>用户打开 DevTools 就能改 localStorage、就能直接 curl 你的接口。所以前端权限真正回答的不是”怎么阻止未授权操作”，而是”<strong>怎么让不同角色看到与身份相符的界面，不误操作、不困惑</strong>“。真正的安全边界永远在后端——每一个接口都要自己校验”这个 token 有没有资格调我”。</p>
+<p>理解了这一点，这个项目的很多”非主流”选择就顺理成章了。整个权限体系分三层：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs text">┌──────────── 认证层：你是谁 ────────────────────────┐<br>│ login → token → localStorage                       │<br>│ axios 拦截器：Authorization: Bearer &lt;token&gt;          │<br>│ 响应 code 401/601 → 踢回 /login（后端兜底）          │<br>└──────────────┬─────────────────────────────────────┘<br>               ▼<br>┌──────────── 功能层：你能看到什么、点什么 ──────────────┐<br>│ GET /sysPermission/getPermissionByUser（靠 token 识别）│<br>│   ├─ buttonPermissionMap → localStorage.btnObj       │<br>│   └─ menuPermissionMap  → localStorage.menuObj       │<br>│ 判断：hasBtnAuth / hasAuth（同步读 localStorage）      │<br>│ 消费：v-auth（按钮） · v-menuAuth（模块入口）           │<br>│       hasAuth + v-if（Tab） · hasAuth（下拉菜单项）    │<br>└──────────────┬─────────────────────────────────────┘<br>               ▼<br>┌──────────── 数据层：你能拿到哪些数据 ──────────────────┐<br>│ 前端：无显式实现（部门=用户属性，地区=业务筛选条件）     │<br>│ 实际：后端按 token 过滤数据范围，前端只负责渲染          │<br>└─────────────────────────────────────────────────────┘<br></code></pre></td></tr></table></figure>
+
+<p>一个和主流后台模板（vue-element-admin 那套）很不一样的前提：<strong>这个系统没有多路由页面</strong>。整个应用只有 <code>/login</code> 和 <code>/home</code> 两个路由，所有业务模块（设施管理、指标体系、评估任务、用户管理……）都是 <code>/home</code> 内部通过 <code>moduleStore.activeModule</code> + <code>v-if</code> 切换的组件。所以经典方案里的”动态路由 + addRoute + permission store”在这完全没有用武之地——<strong>没有路由可以管权限，权限管的是组件</strong>。这个前提让整个权限方案变得非常薄，也暴露了它最本质的形态。</p>
+<p><a id="sec1"></a></p>
+<h2 id="1-登录与凭证：token-从哪来，权限快照存哪去"><a href="#1-登录与凭证：token-从哪来，权限快照存哪去" class="headerlink" title="1. 登录与凭证：token 从哪来，权限快照存哪去"></a>1. 登录与凭证：token 从哪来，权限快照存哪去</h2><h3 id="1-1-登录链路"><a href="#1-1-登录链路" class="headerlink" title="1.1 登录链路"></a>1.1 登录链路</h3><p>登录逻辑收在 Pinia 的 user store 里，流程是清晰的四步：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// src/store/user.ts（有删减）</span><br><span class="hljs-keyword">async</span> <span class="hljs-title function_">login</span>(<span class="hljs-params"><span class="hljs-attr">params</span>: <span class="hljs-built_in">any</span></span>) &#123;<br> <span class="hljs-title function_">sysUserlogin</span>(params).<span class="hljs-title function_">then</span>(<span class="hljs-function"><span class="hljs-params">res</span> =&gt;</span> &#123;<br>  <span class="hljs-keyword">if</span> (res.<span class="hljs-property">code</span> == <span class="hljs-number">200</span>) &#123;<br>   <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">setToken</span>(res.<span class="hljs-property">data</span>.<span class="hljs-property">token</span>);              <span class="hljs-comment">// ① 存 token</span><br>   <span class="hljs-keyword">let</span> userInfo = &#123;<br>    <span class="hljs-attr">username</span>: res.<span class="hljs-property">data</span>.<span class="hljs-property">username</span>,<br>    <span class="hljs-attr">displayName</span>: res.<span class="hljs-property">data</span>.<span class="hljs-property">displayName</span><br>   &#125;;<br>   <span class="hljs-title function_">sysPermissionList</span>().<span class="hljs-title function_">then</span>(<span class="hljs-function"><span class="hljs-params">res</span> =&gt;</span> &#123;            <span class="hljs-comment">// ② 拉权限</span><br>    <span class="hljs-keyword">if</span> (res.<span class="hljs-property">code</span> == <span class="hljs-number">200</span> &amp;&amp; res.<span class="hljs-property">data</span>) &#123;<br>     <span class="hljs-variable language_">localStorage</span>.<span class="hljs-title function_">setItem</span>(<span class="hljs-string">&#x27;btnObj&#x27;</span>, <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(res.<span class="hljs-property">data</span>.<span class="hljs-property">buttonPermissionMap</span>));<br>     <span class="hljs-variable language_">localStorage</span>.<span class="hljs-title function_">setItem</span>(<span class="hljs-string">&#x27;menuObj&#x27;</span>, <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(res.<span class="hljs-property">data</span>.<span class="hljs-property">menuPermissionMap</span>));<br>     <span class="hljs-variable language_">localStorage</span>.<span class="hljs-title function_">setItem</span>(<span class="hljs-string">&#x27;userInfo&#x27;</span>, <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(userInfo));  <span class="hljs-comment">// ③ 存用户信息</span><br>     router.<span class="hljs-title function_">push</span>(<span class="hljs-string">&#x27;/home&#x27;</span>);            <span class="hljs-comment">// ④ 跳首页</span><br>    &#125;<br>   &#125;);<br>  &#125;<br> &#125;);<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>注意两个设计点：</p>
+<p><strong>权限接口不带参数</strong>。<code>GET /sysPermission/getPermissionByUser</code> 连 userId 都不传——后端从请求头的 token 里识别用户。这是正确的做法：<strong>前端声明的身份不可信，凭证里的身份才可信</strong>。同理，登录响应里也只有 <code>username/displayName/token</code>，没有角色列表。</p>
+<p><strong>权限快照存 localStorage，而不是 Pinia state</strong>。这是这个项目最值得说道的取舍。store&#x2F;user.ts 的 state 里只有 <code>token</code> 和 <code>userInfo</code>，权限码两张 Map 完全不进 store。为什么？因为权限的消费方是<strong>自定义指令</strong>——指令的 <code>mounted</code> 钩子在组件 setup 之外执行，拿不到组件实例的 store 上下文，如果权限在 Pinia 里，指令就得在模块顶层手动初始化 pinia 再取 store（这个项目在 directive&#x2F;index.ts 顶部确实 <code>import pinia from &#39;@/store&#39;</code> 做了这件事，但只用于引入结构）。localStorage 是同步全局可读的，指令里一行 <code>localStorage.getItem(&#39;btnObj&#39;)</code> 就能拿到，代价是<strong>权限快照与登录态耦合在浏览器存储里</strong>——第 8 节会讲这个代价。</p>
+<h3 id="1-2-请求层：token-注入与-401-兜底"><a href="#1-2-请求层：token-注入与-401-兜底" class="headerlink" title="1.2 请求层：token 注入与 401 兜底"></a>1.2 请求层：token 注入与 401 兜底</h3><p>axios 拦截器承担全部凭证工作：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// src/service/service.ts（有删减）</span><br><span class="hljs-keyword">const</span> getToken = <span class="hljs-keyword">function</span> (<span class="hljs-params"></span>): <span class="hljs-built_in">string</span> &#123;<br> <span class="hljs-keyword">return</span> <span class="hljs-variable language_">window</span>.<span class="hljs-property">localStorage</span>.<span class="hljs-title function_">getItem</span>(<span class="hljs-string">&#x27;token&#x27;</span>) || <span class="hljs-string">&#x27;&#x27;</span>;<br>&#125;;<br><br>service.<span class="hljs-property">interceptors</span>.<span class="hljs-property">request</span>.<span class="hljs-title function_">use</span>(<span class="hljs-function"><span class="hljs-params">config</span> =&gt;</span> &#123;<br> <span class="hljs-keyword">if</span> (<span class="hljs-title function_">getToken</span>()) &#123;<br>  config.<span class="hljs-property">headers</span>.<span class="hljs-property">Authorization</span> = <span class="hljs-string">&#x27;Bearer &#x27;</span> + <span class="hljs-title function_">getToken</span>();  <span class="hljs-comment">// 有 token 则加 token</span><br> &#125;<br> <span class="hljs-keyword">return</span> config;<br>&#125;);<br><br>service.<span class="hljs-property">interceptors</span>.<span class="hljs-property">response</span>.<span class="hljs-title function_">use</span>(<span class="hljs-function"><span class="hljs-params">response</span> =&gt;</span> &#123;<br> <span class="hljs-keyword">const</span> &#123; data &#125; = response;<br><br> <span class="hljs-comment">// 文件流（excel / octet-stream）直接放行</span><br> <span class="hljs-comment">// ...</span><br><br> <span class="hljs-keyword">if</span> (data.<span class="hljs-property">code</span> === <span class="hljs-number">401</span> || data.<span class="hljs-property">code</span> === <span class="hljs-number">601</span>) &#123;<br>  router.<span class="hljs-title function_">replace</span>(&#123; <span class="hljs-attr">path</span>: <span class="hljs-string">&#x27;/login&#x27;</span> &#125;);   <span class="hljs-comment">// 唯一的登录态失效处理</span><br>  <span class="hljs-keyword">return</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">reject</span>(data);<br> &#125;<br> <span class="hljs-keyword">if</span> (data.<span class="hljs-property">code</span> !== <span class="hljs-number">200</span>) &#123;<br>  message.<span class="hljs-title function_">error</span>(data.<span class="hljs-property">msg</span> || <span class="hljs-string">&#x27;未知错误&#x27;</span>);<br>  <span class="hljs-keyword">return</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">reject</span>(data);<br> &#125;<br> <span class="hljs-keyword">return</span> data;<br>&#125;);<br></code></pre></td></tr></table></figure>
+
+<p>值得注意 <code>validateStatus: status &gt;= 200 &amp;&amp; status &lt;= 500</code>——把 4xx&#x2F;5xx 也当”成功”响应交给业务层，让后端业务码（200&#x2F;401&#x2F;601）成为唯一的状态语言。这样 401 跳转、错误提示的逻辑都收敛在响应拦截器一处。</p>
+<h3 id="1-3-一个”缺失”的路由守卫"><a href="#1-3-一个”缺失”的路由守卫" class="headerlink" title="1.3 一个”缺失”的路由守卫"></a>1.3 一个”缺失”的路由守卫</h3><p>这是整个权限体系里最让熟悉 vue-element-admin 的人意外的地方：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// src/router/index.ts（完整）</span><br>router.<span class="hljs-title function_">beforeEach</span>(<span class="hljs-function"><span class="hljs-params">to</span> =&gt;</span> &#123;<br> <span class="hljs-title function_">setTitle</span>(to);   <span class="hljs-comment">// 只设置 document.title</span><br>&#125;);<br></code></pre></td></tr></table></figure>
+
+<p><strong>没有 token 校验、没有白名单、没有重定向</strong>。未登录直接访问 <code>/#/home</code> 不会被拦截——页面会正常渲染，只是因为 <code>btnObj/menuObj</code> 不存在而全部按钮被禁用，第一个接口请求回来 401 再被踢回 <code>/login</code>。</p>
+<p>这算 bug 吗？功能上不算（后端兜底闭环了），体验上算（用户会看到一屏禁用按钮闪一下）。改进方案第 8 节给出，就三行代码的事。</p>
+<p><a id="sec2"></a></p>
+<h2 id="2-权限数据模型：两张-Map-与「模块-动作」权限码"><a href="#2-权限数据模型：两张-Map-与「模块-动作」权限码" class="headerlink" title="2. 权限数据模型：两张 Map 与「模块:动作」权限码"></a>2. 权限数据模型：两张 Map 与「模块:动作」权限码</h2><p>后端下发的权限长这样（项目里留有一份完整的权限码清单 mock，可以直接当文档看）：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs json"><span class="hljs-punctuation">&#123;</span><br> <span class="hljs-attr">&quot;buttonPermissionMap&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>  <span class="hljs-attr">&quot;set&quot;</span><span class="hljs-punctuation">:</span>      <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;set:view&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;set:delete&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;set:add&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;set:edit&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;model&quot;</span><span class="hljs-punctuation">:</span>    <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;model:delete&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;model:view&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;model:edit&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;model:add&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;rules&quot;</span><span class="hljs-punctuation">:</span>    <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;rules:view&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;workflow&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;workflow:view&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;plan&quot;</span><span class="hljs-punctuation">:</span>     <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;plan:add&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;plan:edit&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;plan:delete&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;plan:view&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;facility&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;facility:add&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;facility:view&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;facility:edit&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;facility:delete&quot;</span><span class="hljs-punctuation">]</span><br> <span class="hljs-punctuation">&#125;</span><span class="hljs-punctuation">,</span><br> <span class="hljs-attr">&quot;menuPermissionMap&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>  <span class="hljs-attr">&quot;indicator&quot;</span><span class="hljs-punctuation">:</span>  <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;indicator:set&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;indicator:model&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;indicator:rules&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;indicator:workflow&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;indicator:system&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;assess&quot;</span><span class="hljs-punctuation">:</span>     <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;assess:assessTask&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;management&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;management:facility&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;user&quot;</span><span class="hljs-punctuation">:</span>       <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;user:userManagement&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;user:permissionManagement&quot;</span><span class="hljs-punctuation">]</span><br> <span class="hljs-punctuation">&#125;</span><br><span class="hljs-punctuation">&#125;</span><br></code></pre></td></tr></table></figure>
+
+<p>模型要点：</p>
+<ol>
+<li><strong>权限码命名规范是 <code>模块:动作</code></strong>。<code>plan:edit</code> 一眼可读：plan 模块的编辑权。不带 <code>:</code> 的是模块级权限（如 <code>user</code>），控制模块入口的可见性。</li>
+<li><strong>按钮权限和菜单权限是两张独立的 Map</strong>，而不是一棵树。后端数据库里它们是一棵权限树（第 6 节），下发时按用途拍平成两组。前端消费时互不干扰：按钮判断查 <code>btnObj</code>，菜单&#x2F;Tab 判断查 <code>menuObj</code>。</li>
+<li><strong>分组结构是”模块 → 权限码数组”</strong>，判断时不需要知道权限码属于哪个模块——遍历所有模块找就是了。这带来一个好处：前端写 <code>v-auth=&quot;&#39;plan:edit&#39;&quot;</code> 时不用关心后端把它归在哪个 key 下，耦合度更低。</li>
+</ol>
+<p>为什么菜单和按钮要分开？因为它们的<strong>失效表现不同</strong>：菜单&#x2F;Tab 没权限应该不可见或不可进入，按钮没权限可以是”可见但禁用”。同一个权限模型，两种交互策略。</p>
+<p><a id="sec3"></a></p>
+<h2 id="3-判断核心：hasBtnAuth-hasAuth-双函数"><a href="#3-判断核心：hasBtnAuth-hasAuth-双函数" class="headerlink" title="3. 判断核心：hasBtnAuth &#x2F; hasAuth 双函数"></a>3. 判断核心：hasBtnAuth &#x2F; hasAuth 双函数</h2><p>两个纯函数是所有权限判断的唯一出口，都在 <code>src/directive/index.ts</code>：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> hasBtnAuth = (<span class="hljs-attr">permission</span>: <span class="hljs-built_in">string</span>): <span class="hljs-function"><span class="hljs-params">boolean</span> =&gt;</span> &#123;<br> <span class="hljs-keyword">const</span> btnStr = <span class="hljs-variable language_">localStorage</span>.<span class="hljs-title function_">getItem</span>(<span class="hljs-string">&#x27;btnObj&#x27;</span>);<br> <span class="hljs-keyword">if</span> (!btnStr) <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br><br> <span class="hljs-keyword">try</span> &#123;<br>  <span class="hljs-keyword">const</span> btnObj = <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">parse</span>(btnStr);<br><br>  <span class="hljs-comment">// 情况1: 权限是扁平数组</span><br>  <span class="hljs-keyword">if</span> (<span class="hljs-title class_">Array</span>.<span class="hljs-title function_">isArray</span>(btnObj)) &#123;<br>   <span class="hljs-keyword">return</span> btnObj.<span class="hljs-title function_">includes</span>(permission);<br>  &#125;<br><br>  <span class="hljs-comment">// 情况2: 权限是分组对象（当前格式）</span><br>  <span class="hljs-keyword">if</span> (<span class="hljs-keyword">typeof</span> btnObj === <span class="hljs-string">&#x27;object&#x27;</span> &amp;&amp; btnObj !== <span class="hljs-literal">null</span>) &#123;<br>   <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> moduleKey <span class="hljs-keyword">in</span> btnObj) &#123;<br>    <span class="hljs-keyword">const</span> permissions = btnObj[moduleKey];<br>    <span class="hljs-keyword">if</span> (<span class="hljs-title class_">Array</span>.<span class="hljs-title function_">isArray</span>(permissions) &amp;&amp; permissions.<span class="hljs-title function_">includes</span>(permission)) &#123;<br>     <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>    &#125;<br>   &#125;<br>   <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br>  &#125;<br>  <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br> &#125; <span class="hljs-keyword">catch</span> (e) &#123;<br>  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">error</span>(<span class="hljs-string">&#x27;❌ 解析 btnObj 失败，请检查 localStorage 格式:&#x27;</span>, e);<br>  <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br> &#125;<br>&#125;;<br></code></pre></td></tr></table></figure>
+
+<p><code>hasAuth</code>（查 menuObj）多一个分支：<strong>不带 <code>:</code> 的参数按”模块级权限”处理</strong>——只要 menuObj 里存在这个模块 key 就算有权限：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> hasAuth = (<span class="hljs-attr">permission</span>: <span class="hljs-built_in">string</span>): <span class="hljs-function"><span class="hljs-params">boolean</span> =&gt;</span> &#123;<br> <span class="hljs-keyword">const</span> menuStr = <span class="hljs-variable language_">localStorage</span>.<span class="hljs-title function_">getItem</span>(<span class="hljs-string">&#x27;menuObj&#x27;</span>);<br> <span class="hljs-keyword">if</span> (!menuStr) <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br> <span class="hljs-keyword">const</span> menuObj = <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">parse</span>(menuStr);<br><br> <span class="hljs-comment">// 情况1: permission 是模块名（不包含 &#x27;:&#x27;），如 &#x27;user&#x27;</span><br> <span class="hljs-keyword">if</span> (!permission.<span class="hljs-title function_">includes</span>(<span class="hljs-string">&#x27;:&#x27;</span>)) &#123;<br>  <span class="hljs-keyword">return</span> <span class="hljs-title class_">Object</span>.<span class="hljs-property"><span class="hljs-keyword">prototype</span></span>.<span class="hljs-property">hasOwnProperty</span>.<span class="hljs-title function_">call</span>(menuObj, permission);<br> &#125;<br> <span class="hljs-comment">// 情况2: 细粒度权限，如 &#x27;indicator:set&#x27;，遍历所有模块匹配</span><br> <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> moduleKey <span class="hljs-keyword">in</span> menuObj) &#123;<br>  <span class="hljs-keyword">const</span> permissions = menuObj[moduleKey];<br>  <span class="hljs-keyword">if</span> (<span class="hljs-title class_">Array</span>.<span class="hljs-title function_">isArray</span>(permissions) &amp;&amp; permissions.<span class="hljs-title function_">includes</span>(permission)) <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br> &#125;<br> <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br>&#125;;<br></code></pre></td></tr></table></figure>
+
+<p>三个值得吸收的细节：</p>
+<ul>
+<li><strong>兼容”扁平数组”和”分组对象”两种数据格式</strong>。这不是过度设计——后端接口结构演进过一轮（mock 文件里两种格式的注释都留着），兼容分支让前端在格式切换期不用发版。对权限这种横切所有页面的基础设施，<strong>消费端对数据格式的容忍度应该拉满</strong>。</li>
+<li><strong>fail-closed：任何解析失败、数据缺失都返回 false</strong>。权限判断的默认值只能是”无权限”。<code>!btnStr return false</code>、<code>catch return false</code>，方向一致。</li>
+<li><strong>try&#x2F;catch 包住 JSON.parse</strong>。localStorage 是用户可污染的存储，损坏的 JSON 不应该让整页指令抛错白屏。</li>
+</ul>
+<p><a id="sec4"></a></p>
+<h2 id="4-双指令：v-auth-与-v-menuAuth"><a href="#4-双指令：v-auth-与-v-menuAuth" class="headerlink" title="4. 双指令：v-auth 与 v-menuAuth"></a>4. 双指令：v-auth 与 v-menuAuth</h2><p>指令在 main.ts 里一行注册：<code>authDirective(app)</code>。两个指令的实现几乎一样，差异只在判断函数：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// src/directive/index.ts（有删减）</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> <span class="hljs-title function_">authDirective</span> = (<span class="hljs-params"><span class="hljs-attr">app</span>: <span class="hljs-built_in">any</span></span>) =&gt; &#123;<br> <span class="hljs-comment">// 按钮级权限</span><br> app.<span class="hljs-title function_">directive</span>(<span class="hljs-string">&#x27;auth&#x27;</span>, &#123;<br>  <span class="hljs-title function_">mounted</span>(<span class="hljs-params"><span class="hljs-attr">el</span>: <span class="hljs-built_in">any</span>, <span class="hljs-attr">options</span>: <span class="hljs-built_in">any</span></span>) &#123;<br>   <span class="hljs-keyword">if</span> (!<span class="hljs-title function_">hasBtnAuth</span>(options.<span class="hljs-property">value</span>)) &#123;<br>    el.<span class="hljs-title function_">setAttribute</span>(<span class="hljs-string">&#x27;disabled&#x27;</span>, <span class="hljs-string">&#x27;disabled&#x27;</span>);<br>    el.<span class="hljs-property">style</span>.<span class="hljs-property">pointerEvents</span> = <span class="hljs-string">&#x27;none&#x27;</span>;   <span class="hljs-comment">// 防点击</span><br>    el.<span class="hljs-property">style</span>.<span class="hljs-property">opacity</span> = <span class="hljs-string">&#x27;0.6&#x27;</span>;          <span class="hljs-comment">// 视觉禁用</span><br>   &#125;<br>  &#125;<br> &#125;);<br><br> <span class="hljs-comment">// 菜单/Tab 级权限</span><br> app.<span class="hljs-title function_">directive</span>(<span class="hljs-string">&#x27;menuAuth&#x27;</span>, &#123;<br>  <span class="hljs-title function_">mounted</span>(<span class="hljs-params"><span class="hljs-attr">el</span>: <span class="hljs-built_in">any</span>, <span class="hljs-attr">options</span>: <span class="hljs-built_in">any</span></span>) &#123;<br>   <span class="hljs-keyword">const</span> &#123; <span class="hljs-attr">value</span>: permission &#125; = options;<br>   <span class="hljs-keyword">if</span> (<span class="hljs-keyword">typeof</span> permission !== <span class="hljs-string">&#x27;string&#x27;</span>) &#123;<br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">warn</span>(<span class="hljs-string">&#x27;⚠️ v-menuAuth 必须传入字符串权限标识&#x27;</span>);<br>    <span class="hljs-keyword">return</span>;<br>   &#125;<br>   <span class="hljs-keyword">if</span> (!<span class="hljs-title function_">hasAuth</span>(permission)) &#123;<br>    el.<span class="hljs-title function_">setAttribute</span>(<span class="hljs-string">&#x27;disabled&#x27;</span>, <span class="hljs-string">&#x27;disabled&#x27;</span>);<br>    el.<span class="hljs-property">style</span>.<span class="hljs-property">pointerEvents</span> = <span class="hljs-string">&#x27;none&#x27;</span>;<br>    el.<span class="hljs-property">style</span>.<span class="hljs-property">opacity</span> = <span class="hljs-string">&#x27;0.6&#x27;</span>;<br>   &#125;<br>  &#125;<br> &#125;);<br>&#125;;<br></code></pre></td></tr></table></figure>
+
+<p><strong>“禁用三件套”是这个方案的一个明确选择</strong>：<code>disabled</code> 属性 + <code>pointerEvents: none</code> + <code>opacity: 0.6</code>。源码注释里留着被放弃的另一个方案：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// if (!btnObj || !btnObj.includes(options.value)) &#123;</span><br><span class="hljs-comment">//  // 如果在用户信息 buttons 数组当中没有，就从 DOM 上干掉</span><br><span class="hljs-comment">//  el.parentNode.removeChild(el);</span><br><span class="hljs-comment">// &#125;</span><br></code></pre></td></tr></table></figure>
+
+<p><strong>移除 DOM vs 禁用</strong>，两种策略的取舍：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>移除 DOM（removeChild）</th>
+<th>禁用三件套</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>用户感知</td>
+<td>“功能不存在”</td>
+<td>“功能存在但无权用”</td>
+</tr>
+<tr>
+<td>布局</td>
+<td>兄弟元素位移，布局跳动</td>
+<td>稳定</td>
+</tr>
+<tr>
+<td>恢复</td>
+<td>几乎不可逆（节点已丢）</td>
+<td>改 style 即可</td>
+</tr>
+<tr>
+<td>适用</td>
+<td>导航型（不该知道的入口）</td>
+<td>操作型（增删改按钮）</td>
+</tr>
+</tbody></table>
+<p>这个项目最终统一用禁用，理由是后台场景里用户通常<strong>需要知道”有这个功能，但我没权限”</strong>——配上 tooltip 说明原因，比入口凭空消失的体验好；同时 DOM 稳定对自动化测试也更友好。代价是”藏起来的秘密入口”会暴露在 DOM 里——但回到第 0 节的立论：前端权限本来就不承担保密职责。</p>
+<p>还有一个容易踩的坑值得点出：<strong>指令只在 <code>mounted</code> 执行一次</strong>。权限快照是登录后一次性写入 localStorage、会话内不变的，所以”一次判断”够用；但如果你的系统支持”不刷新页面热更新权限”，<code>mounted</code> 一次性的指令就不够了，需要用 <code>updated</code> 钩子或在权限变化时强制重渲染（比如给 router-view 加 key）。</p>
+<p><a id="sec5"></a></p>
+<h2 id="5-三层显隐实战：模块入口-→-Tab-→-按钮"><a href="#5-三层显隐实战：模块入口-→-Tab-→-按钮" class="headerlink" title="5. 三层显隐实战：模块入口 → Tab → 按钮"></a>5. 三层显隐实战：模块入口 → Tab → 按钮</h2><h3 id="5-1-第一层：顶部模块入口（v-menuAuth）"><a href="#5-1-第一层：顶部模块入口（v-menuAuth）" class="headerlink" title="5.1 第一层：顶部模块入口（v-menuAuth）"></a>5.1 第一层：顶部模块入口（v-menuAuth）</h3><p>顶部导航的每个模块入口挂指令，权限码就是模块名：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-comment">&lt;!-- src/pages/home/components/home-header/index.vue（有删减） --&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;home-tittle-bg&quot;</span></span><br><span class="hljs-tag"> <span class="hljs-attr">:class</span>=<span class="hljs-string">&quot;[&#x27;cp&#x27;, isActive(&#x27;targetFacilityVisible&#x27;) ? &#x27;acitve&#x27; : &#x27;&#x27;]&quot;</span></span><br><span class="hljs-tag"> @<span class="hljs-attr">click.stop</span>=<span class="hljs-string">&quot;setHearderActiveModule($event, &#x27;targetFacilityVisible&#x27;)&quot;</span></span><br><span class="hljs-tag"> <span class="hljs-attr">v-menuAuth</span>=<span class="hljs-string">&quot;&#x27;management&#x27;&quot;</span>&gt;</span><br> 目标设施管理<br><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;home-tittle-bg&quot;</span> <span class="hljs-attr">...</span> <span class="hljs-attr">v-menuAuth</span>=<span class="hljs-string">&quot;&#x27;indicator&#x27;&quot;</span>&gt;</span>指标体系管理<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><br><span class="hljs-comment">&lt;!-- 下拉菜单项则直接用 v-if + hasAuth --&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">a-menu-item</span> <span class="hljs-attr">v-if</span>=<span class="hljs-string">&quot;hasAuth(&#x27;user&#x27;)&quot;</span> @<span class="hljs-attr">click.stop</span>=<span class="hljs-string">&quot;setHearderActiveModule($event, &#x27;userInfoManage&#x27;)&quot;</span>&gt;</span><br> 用户管理<br><span class="hljs-tag">&lt;/<span class="hljs-name">a-menu-item</span>&gt;</span><br></code></pre></td></tr></table></figure>
+
+<p>同一个位置能看到两种写法并存：独立入口用指令（禁用置灰），下拉菜单项用 <code>v-if</code>（直接不渲染）。因为 Ant Design 的 <code>a-menu-item</code> 上叠 disabled 属性和行内样式会与其自身样式打架，<code>v-if</code> 反而干净——<strong>指令不是唯一答案，合适的容器用合适的方式</strong>。</p>
+<h3 id="5-2-第二层：模块内-Tab（hasAuth-首个可见-Tab-自动选中）"><a href="#5-2-第二层：模块内-Tab（hasAuth-首个可见-Tab-自动选中）" class="headerlink" title="5.2 第二层：模块内 Tab（hasAuth + 首个可见 Tab 自动选中）"></a>5.2 第二层：模块内 Tab（hasAuth + 首个可见 Tab 自动选中）</h3><p>每个模块内部的 Tab 页签也按权限显隐。这里有个容易被忽略的体验问题：<strong>如果默认激活的 Tab 恰好没权限，页面会白屏</strong>。项目的解法是一段 watch，自动选中第一个有权限的 Tab：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// src/pages/IndexManagement/index.vue（有删减）</span><br><span class="hljs-keyword">const</span> activeKey = ref&lt;<span class="hljs-built_in">string</span>&gt;(<span class="hljs-string">&#x27;1&#x27;</span>); <span class="hljs-comment">// 1 指标集 2 指标管理 3 模型库 4 规则库 5 节点库</span><br><br><span class="hljs-keyword">const</span> <span class="hljs-variable constant_">ALL_TAB_KEYS</span> = [<span class="hljs-string">&#x27;1&#x27;</span>, <span class="hljs-string">&#x27;2&#x27;</span>, <span class="hljs-string">&#x27;3&#x27;</span>, <span class="hljs-string">&#x27;4&#x27;</span>, <span class="hljs-string">&#x27;5&#x27;</span>] <span class="hljs-keyword">as</span> <span class="hljs-keyword">const</span>;<br><br><span class="hljs-comment">// 判断每个 tab 是否可见（必须和模板中的 v-if 条件一致！）</span><br><span class="hljs-keyword">const</span> isTabVisible = (<span class="hljs-attr">key</span>: <span class="hljs-built_in">string</span>): <span class="hljs-function"><span class="hljs-params">boolean</span> =&gt;</span> &#123;<br> <span class="hljs-keyword">switch</span> (key) &#123;<br>  <span class="hljs-keyword">case</span> <span class="hljs-string">&#x27;1&#x27;</span>: <span class="hljs-keyword">return</span> <span class="hljs-title function_">hasAuth</span>(<span class="hljs-string">&#x27;indicator:set&#x27;</span>);<br>  <span class="hljs-keyword">case</span> <span class="hljs-string">&#x27;2&#x27;</span>: <span class="hljs-keyword">return</span> <span class="hljs-title function_">hasAuth</span>(<span class="hljs-string">&#x27;indicator:system&#x27;</span>);<br>  <span class="hljs-keyword">case</span> <span class="hljs-string">&#x27;3&#x27;</span>: <span class="hljs-keyword">return</span> <span class="hljs-title function_">hasAuth</span>(<span class="hljs-string">&#x27;indicator:model&#x27;</span>);<br>  <span class="hljs-keyword">case</span> <span class="hljs-string">&#x27;4&#x27;</span>: <span class="hljs-keyword">return</span> <span class="hljs-title function_">hasAuth</span>(<span class="hljs-string">&#x27;indicator:rules&#x27;</span>);<br>  <span class="hljs-keyword">case</span> <span class="hljs-string">&#x27;5&#x27;</span>: <span class="hljs-keyword">return</span> <span class="hljs-title function_">hasAuth</span>(<span class="hljs-string">&#x27;indicator:workflow&#x27;</span>);<br>  <span class="hljs-attr">default</span>: <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br> &#125;<br>&#125;;<br><br><span class="hljs-comment">// 🔁 监听权限变化（或页面初始化），自动设置 activeKey</span><br><span class="hljs-title function_">watch</span>(<br> <span class="hljs-function">() =&gt;</span> [<span class="hljs-title function_">hasAuth</span>(<span class="hljs-string">&#x27;indicator:set&#x27;</span>), <span class="hljs-title function_">hasAuth</span>(<span class="hljs-string">&#x27;indicator:system&#x27;</span>), <span class="hljs-title function_">hasAuth</span>(<span class="hljs-string">&#x27;indicator:model&#x27;</span>),<br>        <span class="hljs-title function_">hasAuth</span>(<span class="hljs-string">&#x27;indicator:rules&#x27;</span>), <span class="hljs-title function_">hasAuth</span>(<span class="hljs-string">&#x27;indicator:workflow&#x27;</span>)],<br> <span class="hljs-function">() =&gt;</span> &#123;<br>  <span class="hljs-keyword">const</span> firstVisibleKey = <span class="hljs-variable constant_">ALL_TAB_KEYS</span>.<span class="hljs-title function_">find</span>(<span class="hljs-function"><span class="hljs-params">key</span> =&gt;</span> <span class="hljs-title function_">isTabVisible</span>(key));<br>  <span class="hljs-keyword">if</span> (firstVisibleKey &amp;&amp; !<span class="hljs-title function_">isTabVisible</span>(activeKey.<span class="hljs-property">value</span>)) &#123;<br>   activeKey.<span class="hljs-property">value</span> = firstVisibleKey;  <span class="hljs-comment">// 只在当前 key 不可见时重置，不打扰用户手动切换</span><br>  &#125;<br> &#125;,<br> &#123; <span class="hljs-attr">immediate</span>: <span class="hljs-literal">true</span> &#125;<br>);<br></code></pre></td></tr></table></figure>
+
+<p>模板侧就是简单的 <code>v-if</code>：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-tag">&lt;<span class="hljs-name">a-tabs</span> <span class="hljs-attr">v-model:activeKey</span>=<span class="hljs-string">&quot;activeKey&quot;</span> @<span class="hljs-attr">change</span>=<span class="hljs-string">&quot;handleChange&quot;</span>&gt;</span><br> <span class="hljs-tag">&lt;<span class="hljs-name">a-tab-pane</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;1&quot;</span> <span class="hljs-attr">tab</span>=<span class="hljs-string">&quot;指标集&quot;</span>   <span class="hljs-attr">v-if</span>=<span class="hljs-string">&quot;hasAuth(&#x27;indicator:set&#x27;)&quot;</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">indexSetList</span> <span class="hljs-attr">v-if</span>=<span class="hljs-string">&quot;activeKey == &#x27;1&#x27;&quot;</span> /&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">a-tab-pane</span>&gt;</span><br> <span class="hljs-tag">&lt;<span class="hljs-name">a-tab-pane</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;2&quot;</span> <span class="hljs-attr">tab</span>=<span class="hljs-string">&quot;指标管理&quot;</span> <span class="hljs-attr">v-if</span>=<span class="hljs-string">&quot;hasAuth(&#x27;indicator:system&#x27;)&quot;</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">indexManageTree</span> <span class="hljs-attr">v-if</span>=<span class="hljs-string">&quot;activeKey == &#x27;2&#x27;&quot;</span> /&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">a-tab-pane</span>&gt;</span><br> <span class="hljs-tag">&lt;<span class="hljs-name">a-tab-pane</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;3&quot;</span> <span class="hljs-attr">tab</span>=<span class="hljs-string">&quot;模型库&quot;</span>   <span class="hljs-attr">v-if</span>=<span class="hljs-string">&quot;hasAuth(&#x27;indicator:model&#x27;)&quot;</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">model-base</span> <span class="hljs-attr">v-if</span>=<span class="hljs-string">&quot;activeKey == &#x27;3&#x27;&quot;</span> /&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">a-tab-pane</span>&gt;</span><br> <span class="hljs-comment">&lt;!-- ... --&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">a-tabs</span>&gt;</span><br></code></pre></td></tr></table></figure>
+
+<p>注意内层还套了一层 <code>v-if=&quot;activeKey == &#39;1&#39;&quot;</code>——Tab 切走时<strong>销毁</strong>内容组件而不是仅隐藏，配合 <code>onBeforeUnmount</code> 里 <code>store.$reset()</code>，保证每个 Tab 进入时都是干净状态。权限显隐和状态清理是两件事，但经常在同一处代码交织。</p>
+<p>这段代码也有个维护性隐患值得一提：<code>isTabVisible</code> 里的权限判断<strong>必须手动和模板里的 v-if 保持一致</strong>（代码注释里自己加了感叹号提醒）。权限项增删时要改两处，漏一处就是”页面空白但 Tab 还在”。更稳的做法是把权限码收进 Tab 配置数组，<code>v-for</code> 渲染——单一数据源，天然同步。</p>
+<h3 id="5-3-第三层：按钮（v-auth）"><a href="#5-3-第三层：按钮（v-auth）" class="headerlink" title="5.3 第三层：按钮（v-auth）"></a>5.3 第三层：按钮（v-auth）</h3><p>全项目约 60 处使用，模式高度统一：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-tag">&lt;<span class="hljs-name">a-button</span> <span class="hljs-attr">v-auth</span>=<span class="hljs-string">&quot;&#x27;plan:add&#x27;&quot;</span> <span class="hljs-attr">type</span>=<span class="hljs-string">&quot;primary&quot;</span>&gt;</span>新增<span class="hljs-tag">&lt;/<span class="hljs-name">a-button</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">a-button</span> <span class="hljs-attr">v-auth</span>=<span class="hljs-string">&quot;&#x27;plan:edit&#x27;&quot;</span>&gt;</span>编辑<span class="hljs-tag">&lt;/<span class="hljs-name">a-button</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">a-button</span> <span class="hljs-attr">v-auth</span>=<span class="hljs-string">&quot;&#x27;plan:delete&#x27;&quot;</span> <span class="hljs-attr">danger</span>&gt;</span>删除<span class="hljs-tag">&lt;/<span class="hljs-name">a-button</span>&gt;</span><br></code></pre></td></tr></table></figure>
+
+<p>卡片操作栏、列表行内操作、详情页按钮，一律 <code>v-auth=&quot;&#39;模块:动作&#39;&quot;</code>。没有任何页面在<strong>逻辑代码里</strong>判断按钮权限后再调接口——按钮禁用了，入口就断了，这是”指令管显隐、后端管校验”的干净分工。</p>
+<p><a id="sec6"></a></p>
+<h2 id="6-权限的配置面：角色管理与权限树"><a href="#6-权限的配置面：角色管理与权限树" class="headerlink" title="6. 权限的配置面：角色管理与权限树"></a>6. 权限的配置面：角色管理与权限树</h2><p>前面都是消费端，现在看权限从哪配出来。用户管理模块有两个 Tab：用户管理 + 权限管理（实际是角色管理），标准的 RBAC 三件套：用户—角色—权限。</p>
+<p><strong>角色配置弹窗</strong>是配置面的核心：Element Plus 的 <code>el-tree</code> 复选树渲染整棵权限树，勾选结果随角色一起保存：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-comment">&lt;!-- src/pages/UserManage/components/permissionModel.vue（有删减） --&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">ModuleItem</span> <span class="hljs-attr">title</span>=<span class="hljs-string">&quot;权限配置&quot;</span>&gt;</span><br> <span class="hljs-tag">&lt;<span class="hljs-name">el-tree</span></span><br><span class="hljs-tag">  <span class="hljs-attr">ref</span>=<span class="hljs-string">&quot;treeRef&quot;</span></span><br><span class="hljs-tag">  <span class="hljs-attr">:data</span>=<span class="hljs-string">&quot;treeData&quot;</span></span><br><span class="hljs-tag">  <span class="hljs-attr">show-checkbox</span></span><br><span class="hljs-tag">  <span class="hljs-attr">node-key</span>=<span class="hljs-string">&quot;permissionId&quot;</span></span><br><span class="hljs-tag">  <span class="hljs-attr">default-expand-all</span></span><br><span class="hljs-tag">  <span class="hljs-attr">:default-checked-keys</span>=<span class="hljs-string">&quot;formState.permissionIdList&quot;</span></span><br><span class="hljs-tag">  <span class="hljs-attr">:props</span>=<span class="hljs-string">&quot;treeProps&quot;</span></span><br><span class="hljs-tag"> /&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">ModuleItem</span>&gt;</span><br></code></pre></td></tr></table></figure>
+
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// 同文件（有删减）</span><br><span class="hljs-comment">// 权限树来自后端</span><br><span class="hljs-keyword">const</span> <span class="hljs-title function_">getPermissionTree</span> = (<span class="hljs-params"></span>) =&gt; &#123;<br> <span class="hljs-title function_">sysPermissionTree</span>().<span class="hljs-title function_">then</span>(<span class="hljs-function"><span class="hljs-params">res</span> =&gt;</span> &#123;<br>  <span class="hljs-keyword">if</span> (res.<span class="hljs-property">code</span> == <span class="hljs-number">200</span> &amp;&amp; res.<span class="hljs-property">data</span>) &#123;<br>   <span class="hljs-title function_">handleTree</span>(res.<span class="hljs-property">data</span>);<br>   treeData.<span class="hljs-property">value</span> = res.<span class="hljs-property">data</span>;<br>  &#125;<br> &#125;);<br>&#125;;<br><br><span class="hljs-comment">// 提交：勾选的节点 id 集合就是角色的权限清单</span><br><span class="hljs-keyword">const</span> <span class="hljs-title function_">handleOk</span> = (<span class="hljs-params"></span>) =&gt; &#123;<br> <span class="hljs-keyword">if</span> (treeRef.<span class="hljs-property">value</span>!.<span class="hljs-title function_">getCheckedKeys</span>(<span class="hljs-literal">false</span>).<span class="hljs-property">length</span> == <span class="hljs-number">0</span>) &#123;<br>  message.<span class="hljs-title function_">error</span>(<span class="hljs-string">&#x27;请选择权限&#x27;</span>);<br>  <span class="hljs-keyword">return</span>;<br> &#125;<br> roleInfoForm.<span class="hljs-property">value</span>.<span class="hljs-title function_">validate</span>().<span class="hljs-title function_">then</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>  <span class="hljs-title function_">emit</span>(<span class="hljs-string">&#x27;sendRole&#x27;</span>, &#123;<br>   ...formState,<br>   <span class="hljs-attr">permissionIdList</span>: treeRef.<span class="hljs-property">value</span>!.<span class="hljs-title function_">getCheckedKeys</span>(<span class="hljs-literal">false</span>)<br>  &#125;);<br> &#125;);<br>&#125;;<br></code></pre></td></tr></table></figure>
+
+<p>几个实现细节：</p>
+<ul>
+<li><strong>权限树是后端的单一事实源</strong>。树的结构（<code>permissionLevel</code> 1 级&#x2F;2 级）、命名全部来自 <code>GET /sysPermission/getPermissionTree</code>，前端只做展示和回显（编辑时 <code>getRoleDetail</code> 带回 <code>permissionIdList</code> 填进 <code>default-checked-keys</code>）。<strong>前端永远不该硬编码权限清单</strong>——项目里那份 <code>utils/roleCode.ts</code> 的权限码 mock 全项目零引用，只当设计文档存在，这是对的位置。</li>
+<li><code>node-key=&quot;permissionId&quot;</code> + <code>getCheckedKeys(false)</code>：参数 <code>false</code> 表示”不含半选父节点”，只提交真正勾中的末级权限，父节点由后端推导，避免”勾了父带出全部子”的歧义数据。</li>
+<li><strong>用户侧挂角色</strong>：用户新增&#x2F;编辑弹窗里是角色<strong>多选</strong>（<code>roleIdList</code> 必填）+ 部门单选。一个用户多个角色，权限并集——这是 RBAC 的标准语义。</li>
+</ul>
+<p>至此闭环完成：管理员在权限树勾出角色 → 用户绑定角色 → 用户登录后 <code>getPermissionByUser</code> 把并集权限拍平成两张 Map 下发 → 前端指令&#x2F;函数消费。</p>
+<p><a id="sec7"></a></p>
+<h2 id="7-数据权限：这一层前端做了什么、该做什么"><a href="#7-数据权限：这一层前端做了什么、该做什么" class="headerlink" title="7. 数据权限：这一层前端做了什么、该做什么"></a>7. 数据权限：这一层前端做了什么、该做什么</h2><p>用户的需求原话是”数据权限”。把这一节留到最后，是因为它需要先辨析概念——<strong>这个项目在前端没有任何数据权限实现，而这是一个合理的架构选择，不是缺失</strong>。</p>
+<h3 id="7-1-先辨析：三个容易混淆的东西"><a href="#7-1-先辨析：三个容易混淆的东西" class="headerlink" title="7.1 先辨析：三个容易混淆的东西"></a>7.1 先辨析：三个容易混淆的东西</h3><p>调查过程中发现的三个”疑似数据权限”，逐一甄别：</p>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>实质</th>
+<th>是数据权限吗</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>设施列表的地区级联筛选（国家&#x2F;省&#x2F;市&#x2F;县）</td>
+<td>查询表单的业务条件，<strong>任何用户都能任意选</strong></td>
+<td>❌ 是筛选，不是权限</td>
+</tr>
+<tr>
+<td>用户资料里的部门字段（departmentId）</td>
+<td>用户的一个<strong>属性</strong>，没有任何接口按它过滤数据</td>
+<td>❌ 是属性，不是权限</td>
+</tr>
+<tr>
+<td>内置用户 <code>record.sign</code> 置灰编辑&#x2F;删除按钮</td>
+<td><strong>数据状态保护</strong>（内置数据不可改），与操作者身份无关</td>
+<td>❌ 是保护，不是权限</td>
+</tr>
+<tr>
+<td>全后端按 token 过滤返回的数据范围</td>
+<td><strong>真·数据权限</strong>：同一接口，不同 token 拿到不同数据</td>
+<td>✅</td>
+</tr>
+</tbody></table>
+<p>一句话区分：<strong>筛选是用户主动选择看什么，权限是系统决定你能看什么</strong>。前者的控制权在用户手里，后者的控制权在身份里。全项目搜索 <code>dataScope</code>&#x2F;<code>数据范围</code> 为零结果——数据范围过滤没有前端参与的显式实现，完全由后端在接口层按 token 隐式完成。</p>
+<h3 id="7-2-为什么”前端零实现”是对的"><a href="#7-2-为什么”前端零实现”是对的" class="headerlink" title="7.2 为什么”前端零实现”是对的"></a>7.2 为什么”前端零实现”是对的</h3><p>回到第 0 节的立论就能推出：数据权限如果做在前端（比如前端拿到数据后按部门过滤再展示），等于<strong>把过滤逻辑放在了攻击者可修改的环境里</strong>——改一行 JS 就能看到全量数据。数据权限的<strong>执行</strong>只有一个安全的位置：后端。前端连”参与”都不应该。</p>
+<p>这个项目的形态是数据权限最薄的样子：登录拿到 token → 每个请求带着 token → 后端认 token 给数据。前端甚至不知道数据被过滤过。优点是简单、绝对安全；缺点也明显——<strong>前端无从给出”为什么这里没数据”的提示</strong>（用户看到空列表，分不清是没数据还是没权限），以及交互上无法做”只能看自己部门”之类的默认约束。</p>
+<h3 id="7-3-如果要做得更好：前端的正确角色"><a href="#7-3-如果要做得更好：前端的正确角色" class="headerlink" title="7.3 如果要做得更好：前端的正确角色"></a>7.3 如果要做得更好：前端的正确角色</h3><p>主流的增强方案（比如若依的数据权限：按角色配”全部&#x2F;本部门&#x2F;本部门及以下&#x2F;仅本人”的 dataScope）里，前端的参与方式仍然是<strong>辅助而非执行</strong>：</p>
+<ol>
+<li><strong>后端把 dataScope 配置随权限接口下发</strong>（比如 <code>{ dataScope: &#39;DEPT_BELOW&#39;, deptId: 103 }</code>）；</li>
+<li>前端用它做<strong>呈现的礼貌</strong>：查询表单的部门树默认定位到自己部门、禁选越权节点；列表的敏感列（成本、手机号）按权限隐藏；</li>
+<li><strong>过滤本身永远在后端</strong>——前端那步只是让 UI 不提供”注定返回空结果”的选项。</li>
+</ol>
+<p>判断一个”前端数据权限”实现是否合格，就一条标准：<strong>把它整段删掉，系统安全性不下降</strong>。删掉后只是体验变差（能选到无权看的选项、发出注定失败的请求），数据一条都不该多出来。</p>
+<p><a id="sec8"></a></p>
+<h2 id="8-短板与改进清单"><a href="#8-短板与改进清单" class="headerlink" title="8. 短板与改进清单"></a>8. 短板与改进清单</h2><p>复盘不能只讲好的。按风险排序：</p>
+<ol>
+<li><p><strong>401 处理不彻底</strong>。响应拦截器里 <code>router.replace(&#39;/login&#39;)</code> 之后直接 reject，<strong>没有清掉 localStorage 里的 token&#x2F;btnObj&#x2F;menuObj</strong>。用户被踢回登录页后重新登录另一个账号，期间带着旧权限快照渲染了一屏；更糟的是如果 token 过期但快照还在，部分页面会出现”按钮都在、点击全 401”的灵异状态。改进：401 分支先 <code>localStorage.clear()</code> 再跳转，登录页 <code>onMounted</code> 顺手清一次。</p>
+</li>
+<li><p><strong>路由守卫缺登录态校验</strong>。未登录直达 <code>/#/home</code> 会看到一屏禁用按钮 + 一串 401 报错。改进只需三行：</p>
+ <figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs typescript">router.<span class="hljs-title function_">beforeEach</span>(<span class="hljs-function"><span class="hljs-params">to</span> =&gt;</span> &#123;<br> <span class="hljs-title function_">setTitle</span>(to);<br> <span class="hljs-keyword">if</span> (to.<span class="hljs-property">path</span> !== <span class="hljs-string">&#x27;/login&#x27;</span> &amp;&amp; !<span class="hljs-variable language_">localStorage</span>.<span class="hljs-title function_">getItem</span>(<span class="hljs-string">&#x27;token&#x27;</span>)) &#123;<br>  <span class="hljs-keyword">return</span> <span class="hljs-string">&#x27;/login&#x27;</span>;<br> &#125;<br>&#125;);<br></code></pre></td></tr></table></figure>
+</li>
+<li><p><strong>权限快照无时效机制</strong>。权限存在 localStorage，会话内不刷新。管理员中途改了某用户权限，该用户不重新登录就不生效（系统配置文件里那句”改了配置必须清空浏览器 localStorage”的注释是同一类问题）。改进：快照加时间戳，超时重拉；或后端权限变更时通过已有的 WebSocket 通道推一个 <code>permission-changed</code> 事件强制刷新。</p>
+</li>
+<li><p><strong>明文密码回显</strong>。用户编辑弹窗的详情回显里带着 <code>cleartextPassword</code> 字段并填进表单——详情接口不该返回明文密码，编辑时留空表示”不修改”即可。同类问题：登录表单预填了演示账号密码，上线前应移除。</p>
+</li>
+<li><p><strong>Tab 权限判断双写</strong>。<code>isTabVisible</code> 与模板 <code>v-if</code> 人工保持同步（5.2 节），应收敛为 Tab 配置数组单一数据源。</p>
+</li>
+</ol>
+<p>这些短板有一个共同背景：它们全部<strong>不影响安全性</strong>（后端兜底闭环了），只影响体验和可维护性——这反过来印证了第 0 节立论的正确性：前端权限做错了顶多难用，不会不安全；后端权限做错了才是事故。</p>
+<p><a id="sec9"></a></p>
+<h2 id="9-写在最后"><a href="#9-写在最后" class="headerlink" title="9. 写在最后"></a>9. 写在最后</h2><table>
+<thead>
+<tr>
+<th>需求</th>
+<th>方案</th>
+<th>关键文件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>登录凭证</td>
+<td>login → token → localStorage，axios 注入 <code>Bearer</code></td>
+<td><code>store/user.ts</code>、<code>service/service.ts</code></td>
+</tr>
+<tr>
+<td>权限下发</td>
+<td><code>getPermissionByUser</code> 靠 token 识别，两张 Map 拍平下发</td>
+<td><code>api/userApi.ts</code></td>
+</tr>
+<tr>
+<td>权限存储</td>
+<td>localStorage 快照（指令在 setup 外同步消费）</td>
+<td><code>store/user.ts</code></td>
+</tr>
+<tr>
+<td>权限模型</td>
+<td><code>模块:动作</code> 权限码，按钮&#x2F;菜单两张独立 Map</td>
+<td><code>utils/roleCode.ts</code>（文档）</td>
+</tr>
+<tr>
+<td>按钮显隐</td>
+<td><code>v-auth</code> 指令 + 禁用三件套</td>
+<td><code>directive/index.ts</code></td>
+</tr>
+<tr>
+<td>模块入口</td>
+<td><code>v-menuAuth</code> 指令 &#x2F; <code>hasAuth</code> + v-if</td>
+<td><code>home-header/index.vue</code></td>
+</tr>
+<tr>
+<td>Tab 显隐</td>
+<td><code>hasAuth</code> + v-if + 首个可见 Tab 自动选中</td>
+<td><code>IndexManagement/index.vue</code></td>
+</tr>
+<tr>
+<td>权限配置</td>
+<td>角色绑定权限树（el-tree 勾选 → permissionIdList）</td>
+<td><code>UserManage/components/permissionModel.vue</code></td>
+</tr>
+<tr>
+<td>数据权限</td>
+<td>前端零实现，后端按 token 过滤（正确位置）</td>
+<td>—</td>
+</tr>
+</tbody></table>
+<p><strong>一句话记住</strong>：前端权限是一套”体验协议”——用 <code>模块:动作</code> 的权限码约定语言，用指令和函数做显隐，用 localStorage 存快照；而数据权限的执行只有一个正确位置，是后端。前端在这一层最好的动作是”呈现的礼貌”，不是”过滤的执行”。</p>
+<h3 id="文件地图"><a href="#文件地图" class="headerlink" title="文件地图"></a>文件地图</h3><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs text">infrastructure-data-plus/src/<br>├── main.ts                           # authDirective(app) 注册双指令<br>├── router/index.ts                   # 路由守卫（仅 setTitle，无鉴权）<br>├── directive/index.ts                # ★ 权限核心：hasBtnAuth / hasAuth / v-auth / v-menuAuth<br>├── store/user.ts                     # 登录链路：token + 权限快照落 localStorage<br>├── service/service.ts                # axios 拦截器：Bearer 注入 + 401/601 踢回登录<br>├── api/userApi.ts                    # 登录/用户/角色/权限树全部接口<br>├── utils/roleCode.ts                 # 权限码清单 mock（零引用，当设计文档）<br>└── pages/<br>    ├── login/index.vue               # 登录表单<br>    ├── home/components/home-header/  # 模块入口 v-menuAuth / 菜单项 hasAuth<br>    ├── IndexManagement/index.vue     # Tab 权限 + 首个可见 Tab 自动选中<br>    ├── AttackMeans/index.vue         # 同款 Tab 权限方案<br>    ├── TargetFacilityManagement/     # v-auth 按钮权限（facility:*）<br>    └── UserManage/<br>        ├── index.vue                 # 用户管理 + 权限管理双 Tab<br>        ├── components/userList.vue       # 用户列表（角色筛选/启停）<br>        ├── components/userInfoModel.vue  # 用户新增编辑（角色多选 + 部门）<br>        ├── components/permissionList.vue # 角色列表<br>        └── components/permissionModel.vue # ★ 角色权限树配置（el-tree）<br></code></pre></td></tr></table></figure>
+
+<h3 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h3><ul>
+<li><a target="_blank" rel="noopener" href="https://panjiachen.github.io/vue-element-admin-site/zh/guide/essentials/permission.html">vue-element-admin 权限方案（动态路由&#x2F;指令的先驱实践）</a></li>
+<li><a target="_blank" rel="noopener" href="https://cn.vuejs.org/guide/reusability/custom-directives.html">Vue 3 官方文档 - 自定义指令</a></li>
+<li><a target="_blank" rel="noopener" href="https://pinia.vuejs.org/zh/">Pinia 官方文档</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Role-based_access_control">RBAC 模型：NIST&#x2F;维基百科</a></li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io">眉眼如初、</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io/2026/09/09/front-end-permission/">https://stellacode98.github.io/2026/09/09/front-end-permission/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://stellacode98.github.io" target="_blank">眉眼如初、</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/Vue3/">Vue3</a><a class="post-meta__tags" href="/tags/axios/">axios</a><a class="post-meta__tags" href="/tags/%E6%9D%83%E9%99%90/">权限</a><a class="post-meta__tags" href="/tags/RBAC/">RBAC</a><a class="post-meta__tags" href="/tags/%E8%87%AA%E5%AE%9A%E4%B9%89%E6%8C%87%E4%BB%A4/">自定义指令</a><a class="post-meta__tags" href="/tags/Pinia/">Pinia</a></div><div class="post-share"><div class="social-share" data-image="/img/avatar.jpg" data-sites="wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/09/09/webpack-performance/" title="Webpack 性能优化速查：构建速度与产物体积，一张表讲完"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">Webpack 性能优化速查：构建速度与产物体积，一张表讲完</div></div><div class="info-2"><div class="info-item-1">Webpack 的优化手段几十条，但目标只有两个： 12构建速度  → 优化的是开发体验（等多久能跑起来）产物体积  → 优化的是用户首屏（下载多少 JS 才能看）  本文不铺原理，每条只留结论 + 最小配置，按「收益 &#x2F; 成本」排序。以 webpack5 为准，webpack4 的差异随文标注。  0. 先测量，再优化没有数据的一切优化都是猜。两件工具先装上： 12345// 体积构成：谁把包撑大的const &#123; BundleAnalyzerPlugin &#125; = require(&#x27;webpack-bundle-analyzer&#x27;)// 各阶段耗时：时间花在哪了const SpeedMeasurePlugin = require(&#x27;speed-measure-webpack-plugin&#x27;)  90% 的项目分析完会发现：体积大头是 node_modules 里的重复依赖和没被 tree shaking 掉的组件库；耗时大头是 babel 对 node_modules 的无谓转译。下面的手段就是逐个干掉它们。 ...</div></div></div></a><a class="pagination-related" href="/2026/09/09/element-plus-table-component/" title="封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟</div></div><div class="info-2"><div class="info-item-1">写过中后台的同学都有体感：列表页的模板代码一半是 &lt;el-table-column&gt; 的复制粘贴，另一半是 &lt;el-pagination&gt; 的事件处理。一个页面十几列，loading、空状态、序号列、多选框、操作列插槽……每个页面把这些再写一遍，改一个列宽要去模板里翻半天。 之前项目里沉淀了一个基于 Element Plus 的通用表格组件，最近又在新项目里用一个「后端下发表头」的动态列场景喂了它一波，正好把完整代码和设计思路整理出来。组件不大，两百多行，但里面有几个值得抠的设计点：配置驱动、插槽透传、单选模拟、跨页多选、分页状态归属。   一、API 设计：三个 prop、三个事件、一个 expose先看组件对外的契约，封装一个组件最重要的就是先把 API 定稳： 12345678910111213props  data     : any[]          行数据  header   : HeaderItem[]   列配置（JSON 声明，见下表）  config   : TableConfig    表格行为配置（loading/total/多...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/09/09/vue-responsive-contrast/" title="Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 Proxy"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 Proxy</div></div><div class="info-2"><div class="info-item-1">Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 ProxyVue 最核心的能力之一，就是响应式。 在使用 Vue 开发应用时，我们通常只需要修改数据： 1state.count++  页面就会自动发生变化。 开发者并不需要手动查找 DOM，再修改对应的节点。 123456789修改数据   ↓响应式系统感知变化   ↓找到依赖该数据的逻辑   ↓重新执行相关逻辑   ↓视图更新  这背后就是 Vue 响应式系统所解决的问题。 Vue2 和 Vue3 都实现了这套机制，但底层实现存在比较明显的区别： 12345678910111213Vue2Object.defineProperty        ↓   getter / setter        ↓   Dep / WatcherVue3      Proxy        ↓  track / trigger        ↓      effect  从 Vue2 到 Vue3，并不只是简单地把一个 API 换成另一个 API，而是响应式系统整体设计的一次变化。 本文从 Obje...</div></div></div></a><a class="pagination-related" href="/2026/09/09/data-platform-data-loading/" title="数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取</div></div><div class="info-2"><div class="info-item-1">在一个数据可视化大屏项目里，「请求接口渲染数据」这件事被环境逼成了一套体系。三个现实约束：  后端是多微服务（事件、设施、图层、用户……），联调排期永远对不齐，前端必须能在后端没就绪时把整个大屏跑起来； 部署环境经常换地址——今天对接测试网关，明天切演示环境，后天要带去客户内网。每次改 baseURL 都要重新打包发版，不可接受； 数据要「实时」——新事件发生后端会推送，但推送消息怎么变成列表和地图上的点，中间有讲究。  这篇文章按数据从后端到像素的路径，把这个项目的数据加载方案拆开讲：运行时配置 → 请求封装 → Mock 拦截 → API 组织 → 数据流转 → 实时推送 → 按需加载。技术栈是 Vue 3 + Pinia + Axios，方案本身与框架关系不大。   一、运行时配置：改地址不重新构建先解决「换环境就重新打包」的问题。思路是把配置从「构建时」挪到「运行时」： 12&lt;!-- index.html：同步加载，保证在任何业务代码执行前就绪 --&gt;&lt;script src=&quot;/config.js&quot;&gt;&lt;/script&gt...</div></div></div></a><a class="pagination-related" href="/2026/09/09/ai-from-streaming/" title="前端工程师的 AI 入门：从流式接口到落地一个 AI 应用"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">前端工程师的 AI 入门：从流式接口到落地一个 AI 应用</div></div><div class="info-2"><div class="info-item-1"> 这篇文章不是概念科普，而是一次真实的落地复盘。最近我在自己的 Vue3 后台管理项目（vue3_admin）里完整实现了一个 AI 智能问答模块：支持 SSE 流式打字机输出、多轮对话记忆、Function Calling 工具调用、可视化组件渲染、会话持久化。本文把这条链路从头到尾拆开讲——为什么需要流式、前端怎么手写 SSE 解析器、Function Calling 的两轮循环到底转了什么、以及从 demo 到可用应用之间隔着哪些工程细节。所有代码都来自这个真实模块，文末附完整文件地图。  目录 0. 前言：前端工程师离 AI 应用有多远 1. 认识流式接口：AI 的回复为什么是”蹦”出来的 2. 服务端：把模型的流转发给浏览器 3. 前端：手写一个 SSE 解析器 4. 从”流”到”聊天界面”：状态编排层 5. 让 AI 用上你的函数：Function Calling 6. 落地成应用：demo 和工程之间隔着什么 7. 展望：MCP 离我们还有多远 8. 写在最后   0. 前言：前端工程师离 AI 应用有多远打开 ChatGPT 或者任何 AI 对话产品，仔细观察它的...</div></div></div></a><a class="pagination-related" href="/2026/09/09/cesium-data-loading/" title="Cesium 数据加载实战：从免 npm 引入到视口驱动的增量上球"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">Cesium 数据加载实战：从免 npm 引入到视口驱动的增量上球</div></div><div class="info-2"><div class="info-item-1"> 这篇文章不是 Cesium 入门教程，而是一次真实项目的落地复盘。最近负责的 Vue3 + Vite 项目里有一块三维地图：CesiumJS 1.123，渲染几十类基础设施（变电站、发电厂、线路……）的点线面数据，支持视口内动态加载、拓扑流动网络、实时事件告警。网上 Cesium 教程大多停留在「new 一个 Viewer + GeoJsonDataSource.load 一个文件」，而真实项目里你要回答的问题其实是：内网离线环境怎么跑、几万个实体怎么不卡、拖动地图时数据怎么增量进出、内存怎么不涨爆。本文按数据流动的顺序，把这条链路从头到尾拆开讲。所有代码都来自这个真实项目，文末附完整文件地图。  目录 0. 前言：一个真实的 Cesium 项目长什么样 1. 加载 Cesium 本体：不用 npm、不用 vite-plugin-cesium 2. Viewer 初始化：先拿到一个”干净”的球 3. 影像底图加载：配置驱动的多源图层 4. 业务数据上球：为什么放弃 Entity，改用 Primitive 5. 视口驱动的增量加载：只请求”看得见”的数据 6. 让数据”活”起来：...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">眉眼如初、</div><div class="author-info-description">记录前端学习与开发中的思考</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">16</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">68</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">13</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/kxl-823"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/kxl-823" target="_blank" title="GitHub"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">欢迎来到我的小站，这里记录我的学习笔记与实践心得</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%AE%E5%BD%95"><span class="toc-number">1.</span> <span class="toc-text">目录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#0-%E5%89%8D%E8%A8%80%EF%BC%9A%E5%89%8D%E7%AB%AF%E6%9D%83%E9%99%90%E5%88%B0%E5%BA%95%E9%98%B2%E8%B0%81"><span class="toc-number">2.</span> <span class="toc-text">0. 前言：前端权限到底防谁</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E7%99%BB%E5%BD%95%E4%B8%8E%E5%87%AD%E8%AF%81%EF%BC%9Atoken-%E4%BB%8E%E5%93%AA%E6%9D%A5%EF%BC%8C%E6%9D%83%E9%99%90%E5%BF%AB%E7%85%A7%E5%AD%98%E5%93%AA%E5%8E%BB"><span class="toc-number">3.</span> <span class="toc-text">1. 登录与凭证：token 从哪来，权限快照存哪去</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-%E7%99%BB%E5%BD%95%E9%93%BE%E8%B7%AF"><span class="toc-number">3.1.</span> <span class="toc-text">1.1 登录链路</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-%E8%AF%B7%E6%B1%82%E5%B1%82%EF%BC%9Atoken-%E6%B3%A8%E5%85%A5%E4%B8%8E-401-%E5%85%9C%E5%BA%95"><span class="toc-number">3.2.</span> <span class="toc-text">1.2 请求层：token 注入与 401 兜底</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-3-%E4%B8%80%E4%B8%AA%E2%80%9D%E7%BC%BA%E5%A4%B1%E2%80%9D%E7%9A%84%E8%B7%AF%E7%94%B1%E5%AE%88%E5%8D%AB"><span class="toc-number">3.3.</span> <span class="toc-text">1.3 一个”缺失”的路由守卫</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E6%9D%83%E9%99%90%E6%95%B0%E6%8D%AE%E6%A8%A1%E5%9E%8B%EF%BC%9A%E4%B8%A4%E5%BC%A0-Map-%E4%B8%8E%E3%80%8C%E6%A8%A1%E5%9D%97-%E5%8A%A8%E4%BD%9C%E3%80%8D%E6%9D%83%E9%99%90%E7%A0%81"><span class="toc-number">4.</span> <span class="toc-text">2. 权限数据模型：两张 Map 与「模块:动作」权限码</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-%E5%88%A4%E6%96%AD%E6%A0%B8%E5%BF%83%EF%BC%9AhasBtnAuth-hasAuth-%E5%8F%8C%E5%87%BD%E6%95%B0"><span class="toc-number">5.</span> <span class="toc-text">3. 判断核心：hasBtnAuth &#x2F; hasAuth 双函数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E5%8F%8C%E6%8C%87%E4%BB%A4%EF%BC%9Av-auth-%E4%B8%8E-v-menuAuth"><span class="toc-number">6.</span> <span class="toc-text">4. 双指令：v-auth 与 v-menuAuth</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-%E4%B8%89%E5%B1%82%E6%98%BE%E9%9A%90%E5%AE%9E%E6%88%98%EF%BC%9A%E6%A8%A1%E5%9D%97%E5%85%A5%E5%8F%A3-%E2%86%92-Tab-%E2%86%92-%E6%8C%89%E9%92%AE"><span class="toc-number">7.</span> <span class="toc-text">5. 三层显隐实战：模块入口 → Tab → 按钮</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E7%AC%AC%E4%B8%80%E5%B1%82%EF%BC%9A%E9%A1%B6%E9%83%A8%E6%A8%A1%E5%9D%97%E5%85%A5%E5%8F%A3%EF%BC%88v-menuAuth%EF%BC%89"><span class="toc-number">7.1.</span> <span class="toc-text">5.1 第一层：顶部模块入口（v-menuAuth）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-%E7%AC%AC%E4%BA%8C%E5%B1%82%EF%BC%9A%E6%A8%A1%E5%9D%97%E5%86%85-Tab%EF%BC%88hasAuth-%E9%A6%96%E4%B8%AA%E5%8F%AF%E8%A7%81-Tab-%E8%87%AA%E5%8A%A8%E9%80%89%E4%B8%AD%EF%BC%89"><span class="toc-number">7.2.</span> <span class="toc-text">5.2 第二层：模块内 Tab（hasAuth + 首个可见 Tab 自动选中）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-%E7%AC%AC%E4%B8%89%E5%B1%82%EF%BC%9A%E6%8C%89%E9%92%AE%EF%BC%88v-auth%EF%BC%89"><span class="toc-number">7.3.</span> <span class="toc-text">5.3 第三层：按钮（v-auth）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E6%9D%83%E9%99%90%E7%9A%84%E9%85%8D%E7%BD%AE%E9%9D%A2%EF%BC%9A%E8%A7%92%E8%89%B2%E7%AE%A1%E7%90%86%E4%B8%8E%E6%9D%83%E9%99%90%E6%A0%91"><span class="toc-number">8.</span> <span class="toc-text">6. 权限的配置面：角色管理与权限树</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E6%95%B0%E6%8D%AE%E6%9D%83%E9%99%90%EF%BC%9A%E8%BF%99%E4%B8%80%E5%B1%82%E5%89%8D%E7%AB%AF%E5%81%9A%E4%BA%86%E4%BB%80%E4%B9%88%E3%80%81%E8%AF%A5%E5%81%9A%E4%BB%80%E4%B9%88"><span class="toc-number">9.</span> <span class="toc-text">7. 数据权限：这一层前端做了什么、该做什么</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#7-1-%E5%85%88%E8%BE%A8%E6%9E%90%EF%BC%9A%E4%B8%89%E4%B8%AA%E5%AE%B9%E6%98%93%E6%B7%B7%E6%B7%86%E7%9A%84%E4%B8%9C%E8%A5%BF"><span class="toc-number">9.1.</span> <span class="toc-text">7.1 先辨析：三个容易混淆的东西</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-2-%E4%B8%BA%E4%BB%80%E4%B9%88%E2%80%9D%E5%89%8D%E7%AB%AF%E9%9B%B6%E5%AE%9E%E7%8E%B0%E2%80%9D%E6%98%AF%E5%AF%B9%E7%9A%84"><span class="toc-number">9.2.</span> <span class="toc-text">7.2 为什么”前端零实现”是对的</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-3-%E5%A6%82%E6%9E%9C%E8%A6%81%E5%81%9A%E5%BE%97%E6%9B%B4%E5%A5%BD%EF%BC%9A%E5%89%8D%E7%AB%AF%E7%9A%84%E6%AD%A3%E7%A1%AE%E8%A7%92%E8%89%B2"><span class="toc-number">9.3.</span> <span class="toc-text">7.3 如果要做得更好：前端的正确角色</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#8-%E7%9F%AD%E6%9D%BF%E4%B8%8E%E6%94%B9%E8%BF%9B%E6%B8%85%E5%8D%95"><span class="toc-number">10.</span> <span class="toc-text">8. 短板与改进清单</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#9-%E5%86%99%E5%9C%A8%E6%9C%80%E5%90%8E"><span class="toc-number">11.</span> <span class="toc-text">9. 写在最后</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%87%E4%BB%B6%E5%9C%B0%E5%9B%BE"><span class="toc-number">11.1.</span> <span class="toc-text">文件地图</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">11.2.</span> <span class="toc-text">参考</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/miniprogram-performance/" title="小程序性能优化实战清单：分包、骨架屏、长列表">小程序性能优化实战清单：分包、骨架屏、长列表</a><time datetime="2026-09-09T15:10:00.000Z" title="发表于 2026-09-09 23:10:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/webpack-performance/" title="Webpack 性能优化速查：构建速度与产物体积，一张表讲完">Webpack 性能优化速查：构建速度与产物体积，一张表讲完</a><time datetime="2026-09-09T14:30:00.000Z" title="发表于 2026-09-09 22:30:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/element-plus-table-component/" title="封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟">封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟</a><time datetime="2026-09-09T13:30:00.000Z" title="发表于 2026-09-09 21:30:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/front-end-permission/" title="前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？">前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？</a><time datetime="2026-09-09T13:30:00.000Z" title="发表于 2026-09-09 21:30:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/data-platform-data-loading/" title="数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取">数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取</a><time datetime="2026-09-09T13:00:00.000Z" title="发表于 2026-09-09 21:00:00">2026-09-09</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By 眉眼如初、</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.2</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.7.0</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><div class="js-pjax"></div><video id="site-video" src="/video/gufeng-snow.mp4" poster="/img/gufeng-girl.webp" autoplay loop muted playsinline disablepictureinpicture></video><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></div></body></html>

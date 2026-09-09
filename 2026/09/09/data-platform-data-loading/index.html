@@ -1,0 +1,385 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取 | 眉眼如初、</title><meta name="author" content="眉眼如初、"><meta name="copyright" content="眉眼如初、"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="一个数据可视化大屏项目里数据加载的完整工程方案：config.js 运行时配置免构建切换后端，Axios 拦截器统一契约与解包，替换 adapter 的 Mock 方案让前端脱离后端开发，WebSocket 不直接渲染而是触发带筛选条件的重拉，再配上滚动懒加载与按需加载的完整清单。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取">
+<meta property="og:url" content="https://stellacode98.github.io/2026/09/09/data-platform-data-loading/index.html">
+<meta property="og:site_name" content="眉眼如初、">
+<meta property="og:description" content="一个数据可视化大屏项目里数据加载的完整工程方案：config.js 运行时配置免构建切换后端，Axios 拦截器统一契约与解包，替换 adapter 的 Mock 方案让前端脱离后端开发，WebSocket 不直接渲染而是触发带筛选条件的重拉，再配上滚动懒加载与按需加载的完整清单。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://stellacode98.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-09-09T13:00:00.000Z">
+<meta property="article:modified_time" content="2026-09-09T12:48:53.688Z">
+<meta property="article:author" content="眉眼如初、">
+<meta property="article:tag" content="axios">
+<meta property="article:tag" content="mock">
+<meta property="article:tag" content="sse">
+<meta property="article:tag" content="websocket">
+<meta property="article:tag" content="前端工程化">
+<meta property="article:tag" content="数据加载">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://stellacode98.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取",
+  "url": "https://stellacode98.github.io/2026/09/09/data-platform-data-loading/",
+  "image": "https://stellacode98.github.io/img/avatar.jpg",
+  "datePublished": "2026-09-09T13:00:00.000Z",
+  "dateModified": "2026-09-09T12:48:53.688Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "眉眼如初、",
+      "url": "https://stellacode98.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.ico"><link rel="canonical" href="https://stellacode98.github.io/2026/09/09/data-platform-data-loading/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/bg-video.css"><meta name="generator" content="Hexo 8.1.2"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">16</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">68</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">13</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/gufeng-girl.webp);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">眉眼如初、</span></a><a class="nav-page-title" href="/"><span class="site-name">数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-09T13:00:00.000Z" title="发表于 2026-09-09 21:00:00">2026-09-09</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-09T12:48:53.688Z" title="更新于 2026-09-09 20:48:53">2026-09-09</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%89%8D%E7%AB%AF%E5%B7%A5%E7%A8%8B%E5%8C%96/">前端工程化</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p>在一个数据可视化大屏项目里，「请求接口渲染数据」这件事被环境逼成了一套体系。三个现实约束：</p>
+<ul>
+<li><strong>后端是多微服务</strong>（事件、设施、图层、用户……），联调排期永远对不齐，前端必须能在后端没就绪时把整个大屏跑起来；</li>
+<li><strong>部署环境经常换地址</strong>——今天对接测试网关，明天切演示环境，后天要带去客户内网。每次改 <code>baseURL</code> 都要重新打包发版，不可接受；</li>
+<li><strong>数据要「实时」</strong>——新事件发生后端会推送，但推送消息怎么变成列表和地图上的点，中间有讲究。</li>
+</ul>
+<p>这篇文章按数据从后端到像素的路径，把这个项目的数据加载方案拆开讲：<strong>运行时配置 → 请求封装 → Mock 拦截 → API 组织 → 数据流转 → 实时推送 → 按需加载</strong>。技术栈是 Vue 3 + Pinia + Axios，方案本身与框架关系不大。</p>
+<span id="more"></span>
+
+<h2 id="一、运行时配置：改地址不重新构建"><a href="#一、运行时配置：改地址不重新构建" class="headerlink" title="一、运行时配置：改地址不重新构建"></a>一、运行时配置：改地址不重新构建</h2><p>先解决「换环境就重新打包」的问题。思路是把配置从「构建时」挪到「运行时」：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-comment">&lt;!-- index.html：同步加载，保证在任何业务代码执行前就绪 --&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">script</span> <span class="hljs-attr">src</span>=<span class="hljs-string">&quot;/config.js&quot;</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span><br></code></pre></td></tr></table></figure>
+
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-comment">// public/config.js：跟静态资源一起部署，不参与构建</span><br><span class="hljs-variable language_">window</span>.<span class="hljs-property">__APP_CONFIG__</span> = &#123;<br>  <span class="hljs-attr">api</span>: &#123;<br>    <span class="hljs-attr">baseURL</span>: <span class="hljs-string">&#x27;https://api.example.com&#x27;</span>,  <span class="hljs-comment">// 网关地址</span><br>    <span class="hljs-attr">timeout</span>: <span class="hljs-number">30000</span>,<br>    <span class="hljs-attr">mock</span>: <span class="hljs-literal">false</span>,                          <span class="hljs-comment">// Mock 总开关</span><br>  &#125;,<br>  <span class="hljs-attr">ws</span>:  &#123; <span class="hljs-attr">enabled</span>: <span class="hljs-literal">true</span>, <span class="hljs-attr">pushUrl</span>: <span class="hljs-string">&#x27;wss://api.example.com/ws/push&#x27;</span>, <span class="hljs-attr">reconnectInterval</span>: <span class="hljs-number">5000</span> &#125;,<br>  <span class="hljs-attr">sse</span>: &#123; <span class="hljs-attr">enabled</span>: <span class="hljs-literal">true</span>, <span class="hljs-attr">url</span>: <span class="hljs-string">&#x27;/api/ai/chat&#x27;</span>, <span class="hljs-attr">mock</span>: <span class="hljs-literal">true</span> &#125;,<br>  <span class="hljs-comment">// 地图中心点、底图列表、瓦片服务前缀……也都在这里</span><br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>读取时与代码里的<strong>默认配置深度合并</strong>，<code>config.js</code> 加载失败也有兜底：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">getConfig</span>(<span class="hljs-params"></span>): <span class="hljs-title class_">AppConfig</span> &#123;<br>  <span class="hljs-keyword">const</span> win = <span class="hljs-variable language_">window</span> <span class="hljs-keyword">as</span> <span class="hljs-built_in">unknown</span> <span class="hljs-keyword">as</span> &#123; <span class="hljs-attr">__APP_CONFIG__</span>?: <span class="hljs-title class_">Partial</span>&lt;<span class="hljs-title class_">AppConfig</span>&gt; &#125;<br>  <span class="hljs-keyword">if</span> (!win.<span class="hljs-property">__APP_CONFIG__</span>) <span class="hljs-keyword">return</span> defaultConfig<br>  <span class="hljs-keyword">return</span> &#123;<br>    <span class="hljs-attr">api</span>:       &#123; ...defaultConfig.<span class="hljs-property">api</span>, ...win.<span class="hljs-property">__APP_CONFIG__</span>.<span class="hljs-property">api</span> &#125;,<br>    <span class="hljs-attr">ws</span>:        &#123; ...defaultConfig.<span class="hljs-property">ws</span>, ...win.<span class="hljs-property">__APP_CONFIG__</span>.<span class="hljs-property">ws</span> &#125;,<br>    <span class="hljs-attr">sse</span>:       &#123; ...defaultConfig.<span class="hljs-property">sse</span>, ...win.<span class="hljs-property">__APP_CONFIG__</span>.<span class="hljs-property">sse</span> &#125;,<br>    <span class="hljs-comment">// ...</span><br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>这个方案有三个细节值得抠：</p>
+<ol>
+<li><code>&lt;script&gt;</code> 必须放在应用 bundle <strong>之前</strong>同步加载（不用 <code>defer</code>），否则应用初始化时配置还没注入；</li>
+<li>深度合并只做了一层——够用的前提下不做通用 <code>deepMerge</code>，配置结构变了让 TS 类型直接报错，比静默合并错位更早暴露问题；</li>
+<li>Vite 生态里更常见的做法是多个 <code>.env.xxx</code> 文件 + <code>import.meta.env</code>，但那是<strong>构建时注入</strong>：<code>vite build</code> 出来的产物里地址已经写死。运行时配置牺牲了一点点加载顺序上的心智负担，换来「同一份产物跑任意环境」——对内网交付项目，这笔账必须这么算。</li>
+</ol>
+<h2 id="二、请求封装：契约、解包、错误分类"><a href="#二、请求封装：契约、解包、错误分类" class="headerlink" title="二、请求封装：契约、解包、错误分类"></a>二、请求封装：契约、解包、错误分类</h2><p>Axios 封装是每个项目的保留节目，这里说三个设计点。</p>
+<p><strong>统一响应契约</strong>。后端所有接口遵循 <code>{ success, code, message, data }</code> 结构，响应拦截器负责校验和<strong>解包</strong>——业务代码拿到的永远是净数据：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs ts">service.<span class="hljs-property">interceptors</span>.<span class="hljs-property">response</span>.<span class="hljs-title function_">use</span>(<br>  <span class="hljs-function">(<span class="hljs-params">response</span>) =&gt;</span> &#123;<br>    <span class="hljs-keyword">const</span> res = response.<span class="hljs-property">data</span> <span class="hljs-keyword">as</span> <span class="hljs-title class_">ApiResponse</span><br>    <span class="hljs-comment">// HTTP 200 但业务失败（success=false 或 code 异常）也走 reject</span><br>    <span class="hljs-keyword">if</span> (!res.<span class="hljs-property">success</span> || (res.<span class="hljs-property">code</span> !== <span class="hljs-number">0</span> &amp;&amp; res.<span class="hljs-property">code</span> !== <span class="hljs-number">200</span>)) &#123;<br>      <span class="hljs-keyword">return</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">reject</span>(<span class="hljs-keyword">new</span> <span class="hljs-title class_">Error</span>(res.<span class="hljs-property">message</span> || <span class="hljs-string">&#x27;请求失败&#x27;</span>))<br>    &#125;<br>    <span class="hljs-keyword">return</span> res.<span class="hljs-property">data</span>   <span class="hljs-comment">// 直接返回 data 字段</span><br>  &#125;,<br>  <span class="hljs-function">(<span class="hljs-params">error</span>) =&gt;</span> &#123; <span class="hljs-comment">/* 见下文错误分类 */</span> &#125;<br>)<br></code></pre></td></tr></table></figure>
+
+<p>业务失败和 HTTP 失败统一成一条 <code>Promise.reject(Error)</code> 流，组件层 <code>catch</code> 到的永远是带中文 message 的 Error，不用每个调用点再判断一次 <code>res.success</code>。</p>
+<p><strong>错误分类比统一提示更重要</strong>。错误拦截器把「同一长得很像的 error」拆成用户能看懂的几种：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">if</span> (error.<span class="hljs-property">response</span>) &#123;<br>  <span class="hljs-keyword">const</span> &#123; status &#125; = error.<span class="hljs-property">response</span><br>  <span class="hljs-keyword">if</span> (status === <span class="hljs-number">401</span>) &#123;                       <span class="hljs-comment">// 登录过期：清凭证 + 跳登录页</span><br>    <span class="hljs-title function_">clearAuth</span>()<br>    <span class="hljs-variable language_">window</span>.<span class="hljs-property">location</span>.<span class="hljs-property">href</span> = <span class="hljs-string">&#x27;/login&#x27;</span><br>    <span class="hljs-keyword">return</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">reject</span>(<span class="hljs-keyword">new</span> <span class="hljs-title class_">Error</span>(<span class="hljs-string">&#x27;登录已过期，请重新登录&#x27;</span>))<br>  &#125;<br>  <span class="hljs-keyword">if</span> (status === <span class="hljs-number">403</span>) <span class="hljs-keyword">return</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">reject</span>(<span class="hljs-keyword">new</span> <span class="hljs-title class_">Error</span>(<span class="hljs-string">&#x27;没有权限执行此操作&#x27;</span>))<br>  <span class="hljs-keyword">return</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">reject</span>(<span class="hljs-keyword">new</span> <span class="hljs-title class_">Error</span>(error.<span class="hljs-property">response</span>.<span class="hljs-property">data</span>?.<span class="hljs-property">message</span> || <span class="hljs-string">`请求错误 (<span class="hljs-subst">$&#123;status&#125;</span>)`</span>))<br>&#125;<br><span class="hljs-keyword">if</span> (error.<span class="hljs-property">code</span> === <span class="hljs-string">&#x27;ECONNABORTED&#x27;</span>) <span class="hljs-keyword">return</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">reject</span>(<span class="hljs-keyword">new</span> <span class="hljs-title class_">Error</span>(<span class="hljs-string">&#x27;请求超时，请稍后重试&#x27;</span>))<br><span class="hljs-keyword">if</span> (axios.<span class="hljs-title function_">isCancel</span>(error))          <span class="hljs-keyword">return</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">reject</span>(<span class="hljs-keyword">new</span> <span class="hljs-title class_">Error</span>(<span class="hljs-string">&#x27;请求已取消&#x27;</span>))<br><span class="hljs-keyword">if</span> (!<span class="hljs-variable language_">window</span>.<span class="hljs-property">navigator</span>.<span class="hljs-property">onLine</span>)       <span class="hljs-keyword">return</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">reject</span>(<span class="hljs-keyword">new</span> <span class="hljs-title class_">Error</span>(<span class="hljs-string">&#x27;网络连接已断开&#x27;</span>))<br></code></pre></td></tr></table></figure>
+
+<p>注意 401 里做了<strong>副作用</strong>（清 token、跳转）——这类「全局性、只该做一次」的处理放拦截器，比每个组件各写一遍可靠得多。</p>
+<p><strong>Token 注入</strong>放在请求拦截器，来源区分 localStorage（记住我）和 sessionStorage（会话级），这是登录模块的约定，请求层只管读。</p>
+<h2 id="三、Mock-拦截：换-adapter，而不是换函数"><a href="#三、Mock-拦截：换-adapter，而不是换函数" class="headerlink" title="三、Mock 拦截：换 adapter，而不是换函数"></a>三、Mock 拦截：换 adapter，而不是换函数</h2><p>前端脱离后端开发，常见方案有三档：</p>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>做法</th>
+<th>问题</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>注释切换</td>
+<td>业务代码里 <code>if (mock) return fakeData</code></td>
+<td>mock 逻辑散落各处，上线前忘删就是事故</td>
+</tr>
+<tr>
+<td>代理工具</td>
+<td>Mock.js 劫持 XHR &#x2F; MSW 拦截 Service Worker</td>
+<td>引新依赖；MSW 需要注册 worker，环境受限时麻烦</td>
+</tr>
+<tr>
+<td><strong>adapter 替换</strong></td>
+<td>请求拦截器里把 axios 的 adapter 换成假实现</td>
+<td>零依赖、零业务侵入，请求根本不发出</td>
+</tr>
+</tbody></table>
+<p>这个项目用的第三档。Axios 的 <code>adapter</code> 是真正发请求的底层函数，在<strong>请求拦截器</strong>里替换它：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">if</span> (mock) &#123;<br>  service.<span class="hljs-property">interceptors</span>.<span class="hljs-property">request</span>.<span class="hljs-title function_">use</span>(<span class="hljs-function">(<span class="hljs-params">config</span>) =&gt;</span> &#123;<br>    <span class="hljs-keyword">const</span> mockData = <span class="hljs-title function_">mockAdapter</span>(config.<span class="hljs-property">url</span>, config.<span class="hljs-property">method</span>, config.<span class="hljs-property">params</span>, config.<span class="hljs-property">data</span>)<br>    <span class="hljs-keyword">if</span> (mockData !== <span class="hljs-literal">undefined</span>) &#123;<br>      config.<span class="hljs-property">adapter</span> = <span class="hljs-function">() =&gt;</span>                 <span class="hljs-comment">// 命中 mock：替换 adapter，直接 resolve 假响应</span><br>        <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">resolve</span>(&#123;<br>          <span class="hljs-attr">data</span>: &#123; <span class="hljs-attr">success</span>: <span class="hljs-literal">true</span>, <span class="hljs-attr">code</span>: <span class="hljs-number">0</span>, <span class="hljs-attr">data</span>: mockData, <span class="hljs-attr">message</span>: <span class="hljs-string">&#x27;ok&#x27;</span> &#125;,<br>          <span class="hljs-attr">status</span>: <span class="hljs-number">200</span>, <span class="hljs-attr">statusText</span>: <span class="hljs-string">&#x27;OK&#x27;</span>, <span class="hljs-attr">headers</span>: &#123;&#125;, config,<br>        &#125;)<br>    &#125;<br>    <span class="hljs-keyword">return</span> config                            <span class="hljs-comment">// 未命中：正常发出真实请求</span><br>  &#125;)<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>路由表用类似后端框架的写法，支持 <code>:param</code> 占位符：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">const</span> <span class="hljs-attr">mockRoutes</span>: <span class="hljs-title class_">MockRoute</span>[] = [<br>  &#123; <span class="hljs-attr">pattern</span>: <span class="hljs-string">&#x27;event-service/event/list&#x27;</span>, <span class="hljs-attr">method</span>: <span class="hljs-string">&#x27;post&#x27;</span>, <span class="hljs-attr">handler</span>: <span class="hljs-function">(<span class="hljs-params">_p, _q, body</span>) =&gt;</span> &#123;<br>      <span class="hljs-comment">// 与真实后端行为一致：category/severity 过滤 + pageNum/pageSize 分页</span><br>      <span class="hljs-keyword">let</span> list = [...mockEvents]<br>      <span class="hljs-keyword">if</span> (<span class="hljs-title class_">Array</span>.<span class="hljs-title function_">isArray</span>(body?.<span class="hljs-property">category</span>) &amp;&amp; body.<span class="hljs-property">category</span>.<span class="hljs-property">length</span> &gt; <span class="hljs-number">0</span>) &#123;<br>        list = list.<span class="hljs-title function_">filter</span>(<span class="hljs-function"><span class="hljs-params">e</span> =&gt;</span> body.<span class="hljs-property">category</span>.<span class="hljs-title function_">includes</span>(e.<span class="hljs-property">category</span>))<br>      &#125;<br>      <span class="hljs-keyword">const</span> start = ((<span class="hljs-title class_">Number</span>(body.<span class="hljs-property">pageNum</span>) || <span class="hljs-number">1</span>) - <span class="hljs-number">1</span>) * (<span class="hljs-title class_">Number</span>(body.<span class="hljs-property">pageSize</span>) || <span class="hljs-number">10</span>)<br>      <span class="hljs-keyword">return</span> &#123; <span class="hljs-attr">records</span>: list.<span class="hljs-title function_">slice</span>(start, start + <span class="hljs-number">10</span>), <span class="hljs-attr">total</span>: list.<span class="hljs-property">length</span>, <span class="hljs-comment">/* ... */</span> &#125;<br>  &#125;&#125;,<br>  &#123; <span class="hljs-attr">pattern</span>: <span class="hljs-string">&#x27;event-service/news/list/:eventId&#x27;</span>, <span class="hljs-attr">method</span>: <span class="hljs-string">&#x27;get&#x27;</span>, <span class="hljs-attr">handler</span>: <span class="hljs-function">(<span class="hljs-params">p</span>) =&gt;</span> <span class="hljs-title function_">findNewsBy</span>(p.<span class="hljs-property">eventId</span>) &#125;,<br>]<br></code></pre></td></tr></table></figure>
+
+<p>两个关键设计：</p>
+<ol>
+<li><strong>mock 行为与真实后端对齐</strong>（过滤、分页、响应结构都按接口文档实现），联调切换时前端逻辑一行不改，只有数据源变了——这正是 adapter 方案的价值：切换点在传输层，不在业务层；</li>
+<li><strong>未命中的路由放行真实请求</strong>并打 warn，允许「一半接口真实、一半接口 mock」的渐进联调状态，而不是全有或全无。</li>
+</ol>
+<h2 id="四、API-层组织：微服务前缀集中管理"><a href="#四、API-层组织：微服务前缀集中管理" class="headerlink" title="四、API 层组织：微服务前缀集中管理"></a>四、API 层组织：微服务前缀集中管理</h2><p>后端按微服务拆分，网关按<strong>路径前缀</strong>路由。前缀常量集中一处定义，避免拼写漂移：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-comment">// api/commonApi.ts —— 服务前缀唯一事实来源</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> eventService = <span class="hljs-string">&#x27;event-service&#x27;</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> facilityService = <span class="hljs-string">&#x27;facility-service&#x27;</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> authService = <span class="hljs-string">&#x27;auth-service&#x27;</span><br><br><span class="hljs-comment">// api/event.ts —— 按业务域拆文件</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">getEventList</span>(<span class="hljs-params"><span class="hljs-attr">params</span>?: <span class="hljs-title class_">EventListParams</span></span>) &#123;<br>  <span class="hljs-keyword">return</span> <span class="hljs-title function_">post</span>(<span class="hljs-string">`/<span class="hljs-subst">$&#123;eventService&#125;</span>/event/list`</span>, &#123; pageNum, pageSize, ...filters &#125;)<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>API 文件只做三件事：拼路径、传参数、<strong>把后端结构翻译成前端类型</strong>。以事件列表为例，后端字段和前端模型并不一致——<code>description</code> → <code>summary</code>，关键词&#x2F;实体字段是 PostgreSQL jsonb 的包装结构（<code>{ null: false, value: &quot;[...]&quot; }</code>，值是序列化字符串）：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-comment">/** PG jsonb 包装字段 → string[] */</span><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">parsePgJsonArray</span>(<span class="hljs-params"><span class="hljs-attr">field</span>: <span class="hljs-title class_">PgJsonField</span> | <span class="hljs-built_in">string</span>[] | <span class="hljs-literal">undefined</span></span>): <span class="hljs-built_in">string</span>[] &#123;<br>  <span class="hljs-keyword">if</span> (!field) <span class="hljs-keyword">return</span> []<br>  <span class="hljs-keyword">if</span> (<span class="hljs-title class_">Array</span>.<span class="hljs-title function_">isArray</span>(field)) <span class="hljs-keyword">return</span> field.<span class="hljs-title function_">map</span>(<span class="hljs-title class_">String</span>)   <span class="hljs-comment">// 兼容后端已展开的形态</span><br>  <span class="hljs-keyword">if</span> (field.<span class="hljs-property">null</span> || !field.<span class="hljs-property">value</span>) <span class="hljs-keyword">return</span> []<br>  <span class="hljs-keyword">try</span> &#123;<br>    <span class="hljs-keyword">const</span> parsed = <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">parse</span>(field.<span class="hljs-property">value</span>)             <span class="hljs-comment">// 值是 JSON 字符串，要二次解析</span><br>    <span class="hljs-keyword">return</span> <span class="hljs-title class_">Array</span>.<span class="hljs-title function_">isArray</span>(parsed) ? parsed.<span class="hljs-title function_">map</span>(<span class="hljs-title class_">String</span>) : []<br>  &#125; <span class="hljs-keyword">catch</span> &#123; <span class="hljs-keyword">return</span> [] &#125;<br>&#125;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">mapBackendEvent</span>(<span class="hljs-params"><span class="hljs-attr">raw</span>: <span class="hljs-title class_">BackendEventInfo</span></span>): <span class="hljs-title class_">EventItem</span> &#123;<br>  <span class="hljs-keyword">return</span> &#123;<br>    <span class="hljs-attr">id</span>: raw.<span class="hljs-property">id</span>,<br>    <span class="hljs-attr">title</span>: raw.<span class="hljs-property">title</span>,<br>    <span class="hljs-attr">summary</span>: raw.<span class="hljs-property">description</span>,          <span class="hljs-comment">// 字段改名收在这一层</span><br>    <span class="hljs-attr">tags</span>: <span class="hljs-title function_">parsePgJsonArray</span>(raw.<span class="hljs-property">keywords</span>),<br>    <span class="hljs-comment">// ...</span><br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>这类「脏活」必须圈死在 API 层——store 和组件永远只见过滤干净的前端类型。后端分页结构在不同接口间还漂移（有的叫 <code>records</code>、有的叫 <code>list</code>、有的叫 <code>rows</code>），同样在 API 层做兼容：<code>res.records ?? res.list ?? res.rows ?? res.data</code>。</p>
+<h2 id="五、完整数据流：以事件列表为例"><a href="#五、完整数据流：以事件列表为例" class="headerlink" title="五、完整数据流：以事件列表为例"></a>五、完整数据流：以事件列表为例</h2><p>把前面的积木串起来，一个大屏面板的数据流长这样：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs text">EventPanel onMounted<br>  └─ Promise.all([loadCategories(), loadSeverities()])   // 筛选项也是接口下发的<br>       └─ loadEvents()<br>            └─ getEventList(&#123; pageNum: 1, pageSize: 10, category, severity, keyword &#125;)<br>                 └─ axios（拦截器：mock 判断 → token → 响应解包）<br>                      └─ mapBackendEvent 字段映射 + jsonb 解析<br>                           └─ store: events = res.list<br>                                ├─ computed filteredEvents        // 多类别/严重度/关键词/视口过滤<br>                                │    └─ EventList v-for 渲染卡片<br>                                │         └─ 滚动距底 80px → loadMoreEvents() 追加下一页<br>                                └─ MapContainer watch(filteredEvents)<br>                                     └─ GeoJSON source.setData()  // 地图增量更新，图层不重建<br></code></pre></td></tr></table></figure>
+
+<p>三个细节：</p>
+<ul>
+<li><strong>筛选在哪层做？</strong> 服务端筛选（接口参数）和客户端筛选（computed）并存：翻页和关键词搜索走接口（数据量大、要分页），视口过滤、会话态标记在 computed 里做（变化频繁、不值得发请求）；</li>
+<li><strong>地图更新用 <code>setData</code> 而不是重建图层</strong>：GeoJSON source 支持 <code>setData</code> 原地换数据，图层定义只建一次，数据变化只触发一次重绘；</li>
+<li><strong>滚动懒加载的守卫</strong>：<code>loadMoreEvents</code> 开头检查 <code>isLoadingMore || !hasMoreEvents</code>，防止滚动事件连打导致重复请求和页码错乱。</li>
+</ul>
+<h2 id="六、实时数据：推送即拉取"><a href="#六、实时数据：推送即拉取" class="headerlink" title="六、实时数据：推送即拉取"></a>六、实时数据：推送即拉取</h2><p>新事件由后端通过 WebSocket 推送。最容易想到的写法是「推送里带什么数据就渲染什么」——<strong>恰恰是错的</strong>。推送消息里往往只有摘要（比如 <code>{ totalCount: 5 }</code>），直接渲染会绕过 API 层的字段映射和 store 的筛选状态；用户此刻正筛选着「突发级事件」，一条不匹配的推送直接塞进列表就是脏数据。</p>
+<p>这个项目的策略是<strong>推送即拉取（push-then-pull）</strong>：WS 消息只当「数据变了」的信号，收到后带着当前筛选条件重拉第一页：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">function</span> <span class="hljs-title function_">handleMessage</span>(<span class="hljs-params"><span class="hljs-attr">event</span>: <span class="hljs-title class_">MessageEvent</span></span>) &#123;<br>  <span class="hljs-keyword">const</span> parsed = <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">parse</span>(event.<span class="hljs-property">data</span>)<br>  <span class="hljs-keyword">const</span> totalCount = <span class="hljs-title class_">Number</span>(parsed?.<span class="hljs-property">data</span>?.<span class="hljs-property">totalCount</span> ?? <span class="hljs-number">0</span>)<br>  <span class="hljs-keyword">if</span> (totalCount &gt; <span class="hljs-number">0</span>) &#123;<br>    <span class="hljs-keyword">if</span> (refreshTimer) <span class="hljs-built_in">clearTimeout</span>(refreshTimer)<br>    refreshTimer = <span class="hljs-built_in">setTimeout</span>(<span class="hljs-function">() =&gt;</span> &#123;        <span class="hljs-comment">// 500ms 节流：连发多条推送只拉一次</span><br>      eventStore.<span class="hljs-title function_">refreshEvents</span>()            <span class="hljs-comment">// 重拉第一页，pageSize 取已加载数量</span><br>    &#125;, <span class="hljs-number">500</span>)<br>    <span class="hljs-title class_">ElNotification</span>(&#123; <span class="hljs-attr">title</span>: <span class="hljs-string">`新事件 (<span class="hljs-subst">$&#123;totalCount&#125;</span> 条)`</span>, <span class="hljs-comment">/* ... */</span> &#125;)<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>这样推送数据永远走与手动刷新完全相同的链路（接口 → 映射 → store → computed → 视图），筛选一致性免费获得。代价是多一次 HTTP 往返，但大屏场景事件频率不高，这点延迟无所谓。<strong>结论：推送当信号用，别当数据用。</strong></p>
+<p>断线重连用<strong>指数退避</strong>，每次失败间隔 ×1.5，封顶 60s，连接成功后归零——避免后端重启时前端疯狂重连：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">function</span> <span class="hljs-title function_">scheduleReconnect</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-keyword">if</span> (manualClosed || !wsConfig.<span class="hljs-property">enabled</span>) <span class="hljs-keyword">return</span><br>  <span class="hljs-keyword">const</span> delay = <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">min</span>(wsConfig.<span class="hljs-property">reconnectInterval</span> * <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">pow</span>(<span class="hljs-number">1.5</span>, reconnectAttempts), <span class="hljs-number">60000</span>)<br>  reconnectAttempts++<br>  reconnectTimer = <span class="hljs-built_in">setTimeout</span>(connect, delay)<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>组件卸载（<code>onUnmounted</code>）时置 <code>manualClosed = true</code> 再 close，防止主动关闭也触发重连。AI 对话的流式回复则走 SSE：原生 <code>fetch</code> + <code>ReadableStream.getReader()</code> 手动按行解析 <code>data:</code> 帧（POST 请求用不了原生 EventSource），同样由 config.js 的 <code>sse.mock</code> 开关一键切到「逐字输出」的假流。</p>
+<h2 id="七、按需加载清单"><a href="#七、按需加载清单" class="headerlink" title="七、按需加载清单"></a>七、按需加载清单</h2><p>大屏首屏压力大，「什么时候才发起请求&#x2F;渲染」需要刻意设计。这个项目的清单：</p>
+<table>
+<thead>
+<tr>
+<th>手段</th>
+<th>实现</th>
+<th>收益</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>组件级懒加载</td>
+<td>面板用 <code>defineAsyncComponent</code> 挂载</td>
+<td>首屏 bundle 不含次要面板</td>
+</tr>
+<tr>
+<td>初始化单例</td>
+<td><code>_homeInitPromise</code> 缓存 Promise，首页与面板共享</td>
+<td>两个组件同时触发初始化只发一次请求</td>
+</tr>
+<tr>
+<td>勾选驱动拉瓦片</td>
+<td>用户勾选图层才请求瓦片地址，取消勾选只隐藏不销毁</td>
+<td>不看的图层零请求</td>
+</tr>
+<tr>
+<td>滚动懒加载</td>
+<td>列表距底 80px 触发下一页</td>
+<td>首屏不拉全量</td>
+</tr>
+<tr>
+<td>弹框懒加载</td>
+<td>详情弹框 <code>watch(visible)</code> 打开时才请求关联新闻</td>
+<td>关联数据用不到就不拉</td>
+</tr>
+<tr>
+<td>防抖节流</td>
+<td>搜索 400ms、视口同步 300ms + 变化阈值、WS 刷新 500ms</td>
+<td>高频交互不放大请求量</td>
+</tr>
+<tr>
+<td>会话级缓存</td>
+<td>全局样式配置进 sessionStorage</td>
+<td>刷新页面不重拉样式</td>
+</tr>
+</tbody></table>
+<p>其中「初始化单例」容易被忽略：首页 <code>onMounted</code> 和图层面板 <code>onMounted</code> 都会触发初始化请求，用 Promise 缓存挡住第二次——比「谁先挂载谁负责」的君子协定可靠得多。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>四种数据源的切换矩阵：</p>
+<table>
+<thead>
+<tr>
+<th>数据源</th>
+<th>开关位置</th>
+<th>生效方式</th>
+<th>典型场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>真实 HTTP</td>
+<td><code>api.mock: false</code></td>
+<td>正常请求</td>
+<td>联调&#x2F;生产</td>
+</tr>
+<tr>
+<td>Mock 数据</td>
+<td><code>api.mock: true</code> + mockRoutes 命中</td>
+<td>替换 axios adapter，请求不发出</td>
+<td>后端未就绪</td>
+</tr>
+<tr>
+<td>WS 推送</td>
+<td><code>ws.enabled</code></td>
+<td>推送当信号，节流后带条件重拉</td>
+<td>事件实时更新</td>
+</tr>
+<tr>
+<td>SSE 流</td>
+<td><code>sse.mock</code></td>
+<td>fetch 流解析 &#x2F; setTimeout 假流</td>
+<td>AI 对话</td>
+</tr>
+</tbody></table>
+<p><strong>一句话记住</strong>：数据加载体系的目标是让「换环境、换数据源、上实时」都不侵入业务代码——配置在运行时注入，Mock 在传输层拦截，字段映射圈死在 API 层，推送只当信号不当数据，剩下的组件就只管对着干净的前端类型渲染。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io">眉眼如初、</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io/2026/09/09/data-platform-data-loading/">https://stellacode98.github.io/2026/09/09/data-platform-data-loading/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://stellacode98.github.io" target="_blank">眉眼如初、</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/axios/">axios</a><a class="post-meta__tags" href="/tags/mock/">mock</a><a class="post-meta__tags" href="/tags/websocket/">websocket</a><a class="post-meta__tags" href="/tags/sse/">sse</a><a class="post-meta__tags" href="/tags/%E6%95%B0%E6%8D%AE%E5%8A%A0%E8%BD%BD/">数据加载</a><a class="post-meta__tags" href="/tags/%E5%89%8D%E7%AB%AF%E5%B7%A5%E7%A8%8B%E5%8C%96/">前端工程化</a></div><div class="post-share"><div class="social-share" data-image="/img/avatar.jpg" data-sites="wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/09/09/element-plus-table-component/" title="封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟</div></div><div class="info-2"><div class="info-item-1">写过中后台的同学都有体感：列表页的模板代码一半是 &lt;el-table-column&gt; 的复制粘贴，另一半是 &lt;el-pagination&gt; 的事件处理。一个页面十几列，loading、空状态、序号列、多选框、操作列插槽……每个页面把这些再写一遍，改一个列宽要去模板里翻半天。 之前项目里沉淀了一个基于 Element Plus 的通用表格组件，最近又在新项目里用一个「后端下发表头」的动态列场景喂了它一波，正好把完整代码和设计思路整理出来。组件不大，两百多行，但里面有几个值得抠的设计点：配置驱动、插槽透传、单选模拟、跨页多选、分页状态归属。   一、API 设计：三个 prop、三个事件、一个 expose先看组件对外的契约，封装一个组件最重要的就是先把 API 定稳： 12345678910111213props  data     : any[]          行数据  header   : HeaderItem[]   列配置（JSON 声明，见下表）  config   : TableConfig    表格行为配置（loading/total/多...</div></div></div></a><a class="pagination-related" href="/2026/09/09/maplibre-layer-management/" title="大屏地图的图层管理实战：MapLibre GL 动态样式、两阶段渲染与叠放排序"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">大屏地图的图层管理实战：MapLibre GL 动态样式、两阶段渲染与叠放排序</div></div><div class="info-2"><div class="info-item-1">最近在一个数据可视化大屏项目里负责地图模块，需求乍看很朴素：左侧一棵图层树，勾选哪类设施，地图上就渲染哪类要素。但做下去发现坑一个接一个：  设施有几十类，点、线、面混杂，样式（颜色&#x2F;图标&#x2F;线宽）全部由后端配置下发，前端写死不可能； 矢量瓦片是异步加载的，「瓦片里到底有哪些要素类型」要等加载完才知道——直接等它，图层会白屏好几百毫秒； 大面积面要素挂图标，放大后每个瓦片上都长出一个重复图标； 一切换底图样式，所有业务图层集体消失（MapLibre 的 setStyle 会重置整个样式）； 把 MapLibre 实例塞进 Vue 的 ref，地图随机报错，内部数据结构被 Proxy 拆得面目全非。  这篇文章把这些问题的解法按主题拆开讲清楚。技术栈是 Vue 3 + Pinia + MapLibre GL（配 PMTiles 协议），但思路对任何 WebGL 地图引擎（Mapbox GL &#x2F; MapLibre &#x2F; 高性能 Canvas 地图）都通用。   一、整体架构：不写图层基类，用组合式工厂先回答一个设计问题：几十种图层，要不要抽象一个 ...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/09/09/front-end-permission/" title="前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？</div></div><div class="info-2"><div class="info-item-1"> 这是真实项目复盘系列的第二篇。这个 Vue3 + Vite + Pinia + Ant Design Vue 的后台系统里，权限是典型的”隐形基础设施”：平时没人注意它，直到某天测试提了个 bug——“为什么这个角色看不到导出按钮”。本文把这套权限体系完整拆开：登录凭证怎么存、权限码怎么建模、按钮和菜单怎么按权限显隐、角色权限在哪个界面配出来，以及一个几乎所有后台项目都会遇到、也最容易做错的问题——数据权限（数据范围过滤）到底放在前端还是后端。先说结论：这个项目把数据权限完全交给了后端，前端只做了功能层（菜单&#x2F;按钮）权限。为什么这样选、边界在哪，第 7 节详细展开。  目录 0. 前言：前端权限到底防谁 1. 登录与凭证：token 从哪来，权限快照存哪去 2. 权限数据模型：两张 Map 与「模块:动作」权限码 3. 判断核心：hasBtnAuth &#x2F; hasAuth 双函数 4. 双指令：v-auth 与 v-menuAuth 5. 三层显隐实战：模块入口 → Tab → 按钮 6. 权限的配置面：角色管理与权限树 7. 数据权限：这一层前端做了什么、该...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">眉眼如初、</div><div class="author-info-description">记录前端学习与开发中的思考</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">16</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">68</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">13</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/kxl-823"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/kxl-823" target="_blank" title="GitHub"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">欢迎来到我的小站，这里记录我的学习笔记与实践心得</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E8%BF%90%E8%A1%8C%E6%97%B6%E9%85%8D%E7%BD%AE%EF%BC%9A%E6%94%B9%E5%9C%B0%E5%9D%80%E4%B8%8D%E9%87%8D%E6%96%B0%E6%9E%84%E5%BB%BA"><span class="toc-number">1.</span> <span class="toc-text">一、运行时配置：改地址不重新构建</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E8%AF%B7%E6%B1%82%E5%B0%81%E8%A3%85%EF%BC%9A%E5%A5%91%E7%BA%A6%E3%80%81%E8%A7%A3%E5%8C%85%E3%80%81%E9%94%99%E8%AF%AF%E5%88%86%E7%B1%BB"><span class="toc-number">2.</span> <span class="toc-text">二、请求封装：契约、解包、错误分类</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81Mock-%E6%8B%A6%E6%88%AA%EF%BC%9A%E6%8D%A2-adapter%EF%BC%8C%E8%80%8C%E4%B8%8D%E6%98%AF%E6%8D%A2%E5%87%BD%E6%95%B0"><span class="toc-number">3.</span> <span class="toc-text">三、Mock 拦截：换 adapter，而不是换函数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81API-%E5%B1%82%E7%BB%84%E7%BB%87%EF%BC%9A%E5%BE%AE%E6%9C%8D%E5%8A%A1%E5%89%8D%E7%BC%80%E9%9B%86%E4%B8%AD%E7%AE%A1%E7%90%86"><span class="toc-number">4.</span> <span class="toc-text">四、API 层组织：微服务前缀集中管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E5%AE%8C%E6%95%B4%E6%95%B0%E6%8D%AE%E6%B5%81%EF%BC%9A%E4%BB%A5%E4%BA%8B%E4%BB%B6%E5%88%97%E8%A1%A8%E4%B8%BA%E4%BE%8B"><span class="toc-number">5.</span> <span class="toc-text">五、完整数据流：以事件列表为例</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E5%AE%9E%E6%97%B6%E6%95%B0%E6%8D%AE%EF%BC%9A%E6%8E%A8%E9%80%81%E5%8D%B3%E6%8B%89%E5%8F%96"><span class="toc-number">6.</span> <span class="toc-text">六、实时数据：推送即拉取</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E6%8C%89%E9%9C%80%E5%8A%A0%E8%BD%BD%E6%B8%85%E5%8D%95"><span class="toc-number">7.</span> <span class="toc-text">七、按需加载清单</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">8.</span> <span class="toc-text">总结</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/miniprogram-performance/" title="小程序性能优化实战清单：分包、骨架屏、长列表">小程序性能优化实战清单：分包、骨架屏、长列表</a><time datetime="2026-09-09T15:10:00.000Z" title="发表于 2026-09-09 23:10:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/webpack-performance/" title="Webpack 性能优化速查：构建速度与产物体积，一张表讲完">Webpack 性能优化速查：构建速度与产物体积，一张表讲完</a><time datetime="2026-09-09T14:30:00.000Z" title="发表于 2026-09-09 22:30:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/element-plus-table-component/" title="封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟">封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟</a><time datetime="2026-09-09T13:30:00.000Z" title="发表于 2026-09-09 21:30:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/front-end-permission/" title="前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？">前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？</a><time datetime="2026-09-09T13:30:00.000Z" title="发表于 2026-09-09 21:30:00">2026-09-09</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/09/data-platform-data-loading/" title="数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取">数据大屏的数据加载体系：运行时配置、Adapter 级 Mock 与推送即拉取</a><time datetime="2026-09-09T13:00:00.000Z" title="发表于 2026-09-09 21:00:00">2026-09-09</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By 眉眼如初、</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.2</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.7.0</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><div class="js-pjax"></div><video id="site-video" src="/video/gufeng-snow.mp4" poster="/img/gufeng-girl.webp" autoplay loop muted playsinline disablepictureinpicture></video><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></div></body></html>
