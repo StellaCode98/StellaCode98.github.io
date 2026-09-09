@@ -43,10 +43,14 @@ render_drafts: false
 post_asset_folder: false
 relative_link: false
 future: true
-# Lostar 主题自带 Highlight.js 高亮，关闭 Hexo 内置高亮
-syntax_highlighter:
+# Butterfly 使用 Hexo 内置 highlight.js 渲染代码高亮
+syntax_highlighter: highlight.js
 highlight:
-  enable: false
+  line_number: true
+  auto_detect: false
+  tab_replace: ' '
+  wrap: false
+  hljs: true
 prismjs:
   enable: false
 
@@ -59,7 +63,7 @@ index_generator:
   per_page: 10
   order_by: -date
 
-# 归档页面：Lostar 主题建议关闭按年/月分组
+# 归档页设置：归档页由 Butterfly 模板自行按年分组展示
 archive_generator:
   enabled: true
   per_page: 0
@@ -99,7 +103,14 @@ ignore:
 # Extensions
 ## Plugins: https://hexo.io/plugins/
 ## Themes: https://hexo.io/themes/
-theme: lostar
+theme: butterfly
+
+# 本地搜索数据源（hexo-generator-searchdb 生成，供 Butterfly local_search 使用）
+search:
+  path: search.xml
+  field: post
+  content: true
+  format: html
 
 # Deployment
 ## Docs: https://hexo.io/docs/one-command-deployment

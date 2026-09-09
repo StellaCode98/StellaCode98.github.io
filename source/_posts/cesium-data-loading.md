@@ -1,6 +1,6 @@
 ---
 title: Cesium 数据加载实战：从免 npm 引入到视口驱动的增量上球
-date: 2026-09-09 20:30:00
+date: 2026-09-09 19:30:00
 description: 以一个真实落地的 Vue3 + Vite + CesiumJS 三维地图项目为例，完整复盘数据上球的全链路：免 npm 的 public 静态引入、配置驱动的多源影像底图、后端 JSON 到 Primitive 的渲染、视口驱动的增量加载与缓存治理，以及自定义 GLSL 流动线、球面弧线这些渲染亮点。
 categories:
   - [GIS 与三维可视化]
@@ -312,7 +312,7 @@ export function createProvider(cfg: LayerConfig) {
 # 天地图 WMTS（注记层 cia，需换成自己的 tk）
 https://t0.tianditu.gov.cn/cia_w/wmts?tk=你的token
   layer: 'cia', style: 'default', tileMatrixSetID: 'w', format: 'tiles'
-# 天天地图 XYZ 写法（等价）
+# 天地图 XYZ 写法（等价）
 https://t0.tianditu.gov.cn/DataServer?T=cia_w&x={x}&y={y}&l={z}&tk=你的token
 
 # ArcGIS World_Imagery（注意是 {z}/{y}/{x}，y 在 x 前面！）
@@ -605,7 +605,7 @@ calculateViewportBoundsFallback() {
 	if (height < 10000) range = 0.05;         // 非常近的视角
 	else if (height < 100000) range = 1.0;    // 中近视角
 	else if (height < 1000000) range = 3.0;   // 远视角
-else if (height < 10000000) range = 15.0; // 全球视角
+	else if (height < 10000000) range = 15.0; // 全球视角
 	else range = 30.0;
 	// 以相机正下方为中心，range 为半径构造矩形……
 }

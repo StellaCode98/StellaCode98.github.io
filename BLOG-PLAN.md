@@ -12,14 +12,14 @@
 
 ## 二、栏目体系（6 个分类，不轻易增改）
 
-| 分类（categories） | 覆盖方向 | tag 规范（举例） |
-| --- | --- | --- |
-| 前端基础 | HTML / CSS / JavaScript / TypeScript | `html` `css` `javascript` `typescript` `浏览器原理` `es6+` |
-| Vue 进阶 | Vue2 / Vue3 / 生态 | `vue2` `vue3` `composition-api` `响应式` `pinia` `源码` |
-| 小程序 | 原理 / 性能 / 跨端 | `微信小程序` `双线程` `taro` `uni-app` |
-| 性能优化 | 指标 / 加载 / 渲染 / 监控 | `core-web-vitals` `懒加载` `长列表` `前端监控` |
-| 前端工程化 | 构建 / 规范 / CI/CD / 微前端 / monorepo | `vite` `webpack` `pnpm` `qiankun` `ci-cd` |
-| AI 与前端 | LLM 应用 / AI 编程 / RAG / Agent | `llm` `rag` `agent` `sse` `ai编程` |
+| 分类（categories） | 覆盖方向                                | tag 规范（举例）                                           |
+| ------------------ | --------------------------------------- | ---------------------------------------------------------- |
+| 前端基础           | HTML / CSS / JavaScript / TypeScript    | `html` `css` `javascript` `typescript` `浏览器原理` `es6+` |
+| Vue 进阶           | Vue2 / Vue3 / 生态                      | `vue2` `vue3` `composition-api` `响应式` `pinia` `源码`    |
+| 小程序             | 原理 / 性能 / 跨端                      | `微信小程序` `双线程` `taro` `uni-app`                     |
+| 性能优化           | 指标 / 加载 / 渲染 / 监控               | `core-web-vitals` `懒加载` `长列表` `前端监控`             |
+| 前端工程化         | 构建 / 规范 / CI/CD / 微前端 / monorepo | `vite` `webpack` `pnpm` `qiankun` `ci-cd`                  |
+| AI 与前端          | LLM 应用 / AI 编程 / RAG / Agent        | `llm` `rag` `agent` `sse` `ai编程`                         |
 
 规则：
 
@@ -49,11 +49,13 @@
 > 标 ⭐ 的是系列首篇候选；`（实战）`表示适合结合自己项目写案例。
 
 ### HTML
+
 - 被低估的 HTML：语义化、可访问性与那些你没用的标签 ⭐
 - 现代浏览器渲染管线：从 HTML 到像素
 - Web Components：原生组件方案还香吗
 
 ### CSS
+
 - 现代布局选型指南：Flex / Grid / 容器查询 ⭐
 - 层叠上下文与 BFC：那些年「莫名其妙」的样式问题
 - CSS 动画性能：合成层、will-change 与掉帧排查
@@ -61,6 +63,7 @@
 - 新特性实战：:has()、嵌套、Cascade Layers
 
 ### JavaScript
+
 - 把事件循环讲透：宏任务、微任务与渲染时机 ⭐
 - 内存管理与泄漏排查实战（实战）
 - Promise / async-await 手写与设计剖析
@@ -69,12 +72,14 @@
 - ES 模块与 Tree Shaking 的底层逻辑
 
 ### TypeScript
+
 - TypeScript 进阶地图：从「会用」到「会设计类型」 ⭐
 - 泛型与条件类型实战：写一个类型安全的请求封装
 - tsconfig 关键配置逐项讲清
 - TS 大型项目落地：类型收窄、unknown 与 any 治理（实战）
 
 ### Vue2 / Vue3
+
 - Vue2 与 Vue3 响应式原理对比：defineProperty → Proxy ⭐
 - diff 算法与 key 的正确用法
 - Composition API 的设计思想：为什么不再用 Options
@@ -83,12 +88,14 @@
 - Vue2 项目迁移 Vue3 全流程实录（实战）
 
 ### 小程序
+
 - 双线程架构解析：为什么 setData 是性能瓶颈 ⭐
 - 小程序性能优化清单：分包、骨架屏、长列表（实战）
 - 跨端方案对比：Taro / uni-app 怎么选
 - 小程序登录态与支付的前端侧全流程
 
 ### 性能优化
+
 - 前端性能优化全景图：指标、手段、监控体系 ⭐
 - Core Web Vitals：LCP / INP / CLS 的优化清单
 - 加载优化：资源体积、懒加载、预加载与 HTTP 缓存（实战）
@@ -96,6 +103,7 @@
 - 从 0 搭建前端监控体系：采集、上报、告警（实战）
 
 ### 前端工程化
+
 - Vite 为什么快：esbuild、按需编译原理与落地 ⭐
 - Vite vs Webpack：迁移成本与收益评估（实战）
 - pnpm + monorepo：多包仓库实践
@@ -104,6 +112,7 @@
 - 从 0 搭建一个组件库并发布 npm（实战）
 
 ### AI 与前端
+
 - 前端工程师的 AI 入门：从流式接口到落地一个 AI 应用 ⭐
 - SSE 流式渲染：打字机效果的前端实现细节
 - Function Calling 与 Agent：LLM 应用的前端架构
