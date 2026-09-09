@@ -116,5 +116,5 @@ search:
 ## Docs: https://hexo.io/docs/one-command-deployment
 deploy:
   type: git
-  repo: https://github.com/kxl-823/kxl-823.github.io.git
+  repo: https://github.com/StellaCode98/StellaCode98.github.io.git
   branch: main   # 注意：现在 GitHub 默认分支是 main，不是 master
