@@ -315,7 +315,7 @@ async function process(items, work) {
 
 **一句话记住**：同步代码一口气跑完 → 清空微任务 → 也许渲染 → 下一个宏任务——浏览器如此；Node 只是换了一套宏任务的来源（六个阶段）和两条更早清空的队列（nextTick、微任务），这条主循环铁律不变。
 
-## 参考
+<!-- ## 参考
 
 - [WHATWG HTML Standard — Event loops](https://html.spec.whatwg.org/multipage/webappapis.html#event-loops)
 - [MDN：事件循环](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Event_loop)
@@ -323,4 +323,4 @@ async function process(items, work) {
 - [Jake Archibald：Tasks, microtasks, queues and schedules](https://jakearchibald.com/2015/tasks-microtasks-queues-and-schedules/)
 - [Philip Roberts：What the heck is the event loop anyway?（JSConf EU 2014）](https://www.youtube.com/watch?v=8aGhZQkoFbQ)
 - [Node.js 官方文档：The Event Loop, Timers, and process.nextTick](https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick)
-- [web.dev：Optimize long tasks](https://web.dev/articles/optimize-long-tasks)
+- [web.dev：Optimize long tasks](https://web.dev/articles/optimize-long-tasks) -->
