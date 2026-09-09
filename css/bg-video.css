@@ -1,0 +1,26 @@
+/* 全站动态视频背景：固定铺满、置于所有内容之下、不响应鼠标 */
+#site-video {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  z-index: -999;
+  pointer-events: none;
+}
+
+/* 顶部横幅透明，透出背后的固定视频背景 */
+#page-header {
+  background: transparent !important;
+}
+
+/* 用户系统开启“减少动态效果”时退回纯色背景 */
+@media (prefers-reduced-motion: reduce) {
+  #site-video {
+    display: none;
+  }
+  #page-header {
+    background: #49b1f5 !important;
+  }
+}
