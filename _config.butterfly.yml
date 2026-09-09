@@ -59,7 +59,7 @@ favicon: /img/favicon.ico
 # 頭像設置
 avatar:
   # 頭像圖片鏈接
-  img: /img/avatar1.jpg
+  img: /img/avatar.jpg
   # 是否啟用頭像效果
   effect: true
 
