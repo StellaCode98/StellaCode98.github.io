@@ -1222,6 +1222,8 @@ inject:
   head:
     # 动态视频背景样式
     - <link rel="stylesheet" href="/css/bg-video.css">
+    # 古风柔和配色（分页/相关推荐卡片黛蓝半透明、页脚烟青半透明）
+    - <link rel="stylesheet" href="/css/gufeng-soft.css">
   bottom:
     # 全站循环视频背景（古风雪景，自托管于 /video/gufeng-snow.mp4，海报帧用同款封面图）
     - <video id="site-video" src="/video/gufeng-snow.mp4" poster="/img/gufeng-girl.webp" autoplay loop muted playsinline disablepictureinpicture></video>
