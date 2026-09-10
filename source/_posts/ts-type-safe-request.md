@@ -1,6 +1,6 @@
 ---
 title: 泛型与条件类型实战：写一个类型安全的请求封装
-date: 2026-09-10 22:40:00
+date: 2026-09-10 12:40:00
 description: 以一个真实演进过程讲透 TypeScript 类型编程：从 any 满天飞的 request 封装出发，用泛型让返回值有类型，用 keyof + 索引访问把 API 定义表变成唯一数据源，用条件类型 + infer 自动提取 params/data/resp，用「条件类型 + 可变元组」实现有参数必传、无参数不传，再用模板字面量类型递归提取 REST 路径参数，最后收束 never、satisfies 与分布式条件类型三大坑。
 categories:
   - [TypeScript, 实战]

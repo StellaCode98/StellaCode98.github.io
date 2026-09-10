@@ -6,9 +6,7 @@ categories:
   - [Vue, 源码]
 tags:
   - Vue3
-  - 编译器
   - patchFlag
-  - 静态提升
   - 性能优化
 ---
 
