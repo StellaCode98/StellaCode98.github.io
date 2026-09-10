@@ -1,0 +1,409 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>TCP、HTTP、WebSocket 与 SSE：一根管道上的四种用法 | 眉眼如初、</title><meta name="author" content="StellaCode98"><meta name="copyright" content="StellaCode98"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="四个协议分处两层：TCP 是传输层的可靠字节流，本身没有消息边界；HTTP、SSE、WebSocket 是其上的应用层协议，分别用报文规则、事件流、帧协议在字节流上切出消息。本文全部配可运行的 Node.js 代码与真实输出：从 seq&#x2F;ack 的语义讲透三次握手与四次挥手（含半关闭实验），再到 HTTP 报文解析器、SSE 事件流、WebSocket 帧逐字节分析。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="TCP、HTTP、WebSocket 与 SSE：一根管道上的四种用法">
+<meta property="og:url" content="https://stellacode98.github.io/2026/09/10/network-tcp-http-websocket-sse/index.html">
+<meta property="og:site_name" content="眉眼如初、">
+<meta property="og:description" content="四个协议分处两层：TCP 是传输层的可靠字节流，本身没有消息边界；HTTP、SSE、WebSocket 是其上的应用层协议，分别用报文规则、事件流、帧协议在字节流上切出消息。本文全部配可运行的 Node.js 代码与真实输出：从 seq&#x2F;ack 的语义讲透三次握手与四次挥手（含半关闭实验），再到 HTTP 报文解析器、SSE 事件流、WebSocket 帧逐字节分析。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://stellacode98.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-09-10T02:46:00.000Z">
+<meta property="article:modified_time" content="2026-09-10T03:04:00.254Z">
+<meta property="article:author" content="StellaCode98">
+<meta property="article:tag" content="HTTP">
+<meta property="article:tag" content="SSE">
+<meta property="article:tag" content="TCP">
+<meta property="article:tag" content="WebSocket">
+<meta property="article:tag" content="网络">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://stellacode98.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "TCP、HTTP、WebSocket 与 SSE：一根管道上的四种用法",
+  "url": "https://stellacode98.github.io/2026/09/10/network-tcp-http-websocket-sse/",
+  "image": "https://stellacode98.github.io/img/avatar.jpg",
+  "datePublished": "2026-09-10T02:46:00.000Z",
+  "dateModified": "2026-09-10T03:04:00.254Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "StellaCode98",
+      "url": "https://stellacode98.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.ico"><link rel="canonical" href="https://stellacode98.github.io/2026/09/10/network-tcp-http-websocket-sse/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'TCP、HTTP、WebSocket 与 SSE：一根管道上的四种用法',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/bg-video.css"><link rel="stylesheet" href="/css/gufeng-soft.css"><meta name="generator" content="Hexo 8.1.2"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">21</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">77</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">16</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/gufeng-girl.webp);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">眉眼如初、</span></a><a class="nav-page-title" href="/"><span class="site-name">TCP、HTTP、WebSocket 与 SSE：一根管道上的四种用法</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">TCP、HTTP、WebSocket 与 SSE：一根管道上的四种用法</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-10T02:46:00.000Z" title="发表于 2026-09-10 10:46:00">2026-09-10</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-10T03:04:00.254Z" title="更新于 2026-09-10 11:04:00">2026-09-10</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%89%8D%E7%AB%AF%E5%9F%BA%E7%A1%80/">前端基础</a><i class="fas fa-angle-right post-meta-separator"></i><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%89%8D%E7%AB%AF%E5%9F%BA%E7%A1%80/%E7%BD%91%E7%BB%9C/">网络</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p>这四个名字经常一起出现，但它们并不在同一层面上竞争：</p>
+<blockquote>
+<p><strong>TCP 是传输层的「管道」</strong>：保证字节可靠、有序地到达，但对内容的格式一无所知。<strong>HTTP、SSE、WebSocket 都是应用层协议</strong>，跑在同一根 TCP 管道上——区别只在于怎么用这根管道：HTTP 用报文规则切出「一问一答」，SSE 让一次响应永远不结束从而单向推送，WebSocket 握手后换成自己的帧协议实现全双工。</p>
+</blockquote>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs text">应用层    HTTP(一问一答)   SSE(单向事件流)   WebSocket(全双工帧)<br>              │               │                  │<br>传输层        └───────────── TCP(可靠字节流) ─────────────┘<br>网络层                          IP(尽力送达)<br></code></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<h2 id="一、TCP：一根没有消息边界的字节流"><a href="#一、TCP：一根没有消息边界的字节流" class="headerlink" title="一、TCP：一根没有消息边界的字节流"></a>一、TCP：一根没有消息边界的字节流</h2><p>IP 层只管「尽力送达」，丢包、乱序、重复都不负责。TCP 在其上补齐三件事：</p>
+<ul>
+<li><strong>连接</strong>：握手同步双方的起始序号，挥手协商关闭；</li>
+<li><strong>可靠</strong>：每个字节都有编号，接收方逐段确认（ACK），超时未确认就重传；</li>
+<li><strong>不撑死对方</strong>：滑动窗口做流量控制（别超过接收方缓冲区），拥塞窗口做拥塞控制（别超过网络承载力）。</li>
+</ul>
+<h3 id="1-1-先搞懂-seq-和-ack，握手才看得懂"><a href="#1-1-先搞懂-seq-和-ack，握手才看得懂" class="headerlink" title="1.1 先搞懂 seq 和 ack，握手才看得懂"></a>1.1 先搞懂 seq 和 ack，握手才看得懂</h3><p>TCP 报文头里最容易「背了就忘」的就是这两个数字，其实语义很简单：</p>
+<ul>
+<li><strong>seq（序号）</strong>：本报文段携带的数据，从字节流的<strong>第几个字节</strong>开始编号；</li>
+<li><strong>ack（确认号）</strong>：你发来的数据我已经按序收到了 <code>ack - 1</code> 字节，<strong>期望你下一个从 <code>ack</code> 开始发</strong>。</li>
+</ul>
+<p>数据传输阶段两者如何走，一个例子就够：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs text">客户端                                服务端<br>  │ ── seq=1001, 数据 &quot;Hello&quot; ──► │    发 5 个字节<br>  │ ◄─ ack=1006 ──────────────── │    1001+5，&quot;前 1005 个都收到了，下次从 1006 发&quot;<br></code></pre></td></tr></table></figure>
+
+<p>「确认 &#x3D; 收到的最后字节序号 + 1」这条规则，在握手和挥手里会反复出现。</p>
+<h3 id="1-2-三次握手：交换的不是数据，是初始序号"><a href="#1-2-三次握手：交换的不是数据，是初始序号" class="headerlink" title="1.2 三次握手：交换的不是数据，是初始序号"></a>1.2 三次握手：交换的不是数据，是初始序号</h3><p>建立连接前，双方对彼此的编号体系一无所知。握手要做的事：<strong>交换初始序号（ISN），并让双方都确认「自己和对方的收发能力都正常」</strong>。带具体数字走一遍：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs text">客户端                                       服务端（LISTEN）<br>  │                                            │<br>  │ ──① SYN, seq=1000 ──────────────────────► │   &quot;请求连接，我的数据从 1000 开始编号&quot;<br>  │   SYN_SENT                                 │   SYN_RCVD<br>  │                                            │<br>  │ ◄─② SYN+ACK, seq=5000, ack=1001 ────────── │   &quot;同意；我的数据从 5000 开始，<br>  │   ESTABLISHED                              │      你的 1000 我收到了(占一个序号)&quot;<br>  │                                            │<br>  │ ──③ ACK, ack=5001 ──────────────────────► │   ESTABLISHED<br></code></pre></td></tr></table></figure>
+
+<p>每一步之后，「谁确认了什么」：</p>
+<table>
+<thead>
+<tr>
+<th>报文</th>
+<th>客户端已确认</th>
+<th>服务端已确认</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>① SYN</td>
+<td>—（还什么都不知道）</td>
+<td>客户端能发、自己能收</td>
+</tr>
+<tr>
+<td>② SYN+ACK</td>
+<td>自己能发能收、服务端能发能收</td>
+<td>（同①）</td>
+</tr>
+<tr>
+<td>③ ACK</td>
+<td>（同②）</td>
+<td>自己能发、客户端能收 → 双方齐全</td>
+</tr>
+</tbody></table>
+<p><strong>为什么不是两次</strong>：走到②就停的话，服务端已经单方面建立连接，但它发出的 <code>SYN+ACK</code> 有没有被客户端收到，永远没有验证——包丢了它就只能傻等。另一个经典场景：网络里滞留的<strong>旧 SYN</strong>（历史连接的残包）迟到抵达服务端，两次握手下服务端会直接建连白占资源；三次握手下客户端发现 <code>ack</code> 跟自己的序号对不上，回 RST 拒绝。</p>
+<p><strong>为什么不是四次</strong>：② 里服务端的「确认对方」(ACK) 和「介绍自己」(SYN) 没有理由分开发，合并成一个包；三次已经让双方的确认闭环，多一次纯浪费。</p>
+<p><strong>为什么握手包也要占序号</strong>：SYN 和 FIN 虽然不携带数据，但都是「改变字节流状态」的关键报文，各占一个序号，所以②里的 ack 是对方 seq + 1。丢包重传和数据包共用同一套 seq&#x2F;ack 体系——比如③丢了，服务端会重传 <code>SYN+ACK</code>；若客户端已经直接开始发数据，数据报文自带的 <code>ack=5001</code> 同样能让服务端进入 ESTABLISHED。</p>
+<h3 id="1-3-四次挥手：FIN-只关一个方向"><a href="#1-3-四次挥手：FIN-只关一个方向" class="headerlink" title="1.3 四次挥手：FIN 只关一个方向"></a>1.3 四次挥手：FIN 只关一个方向</h3><p>TCP 是<strong>全双工</strong>的——两个方向各自独立收发，所以关闭也要<strong>两边各关各的</strong>。FIN 的语义不是「断开连接」，而是「<strong>我的数据发完了</strong>」：只关写方向，读方向还开着（半关闭）。用代码验证这一点：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">const</span> net = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;net&#x27;</span>);<br><span class="hljs-keyword">const</span> <span class="hljs-title function_">log</span> = (<span class="hljs-params">who, msg</span>) =&gt; <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`[<span class="hljs-subst">$&#123;who&#125;</span>] <span class="hljs-subst">$&#123;msg&#125;</span>`</span>);<br><br><span class="hljs-comment">// allowHalfOpen: true —— Node 默认收到 FIN 会自动回 FIN，</span><br><span class="hljs-comment">// 关掉这个默认行为，才能看到协议本来的半关闭</span><br><span class="hljs-keyword">const</span> server = net.<span class="hljs-title function_">createServer</span>(&#123; <span class="hljs-attr">allowHalfOpen</span>: <span class="hljs-literal">true</span> &#125;, <span class="hljs-function">(<span class="hljs-params">socket</span>) =&gt;</span> &#123;<br>  socket.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;data&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;&#125;);            <span class="hljs-comment">// 消费数据，&#x27;end&#x27; 才会触发</span><br>  socket.<span class="hljs-title function_">write</span>(<span class="hljs-string">&#x27;服务端：连接刚建立时发的数据\n&#x27;</span>);<br>  socket.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;end&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;                <span class="hljs-comment">// 收到客户端 FIN：它不再发了</span><br>    <span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;server&#x27;</span>, <span class="hljs-string">&#x27;收到 FIN，但我这边还有话没说完&#x27;</span>);<br>    socket.<span class="hljs-title function_">write</span>(<span class="hljs-string">&#x27;收到你的FIN，我这边还有话没说完\n&#x27;</span>);   <span class="hljs-comment">// 半关闭下照常发送</span><br>    <span class="hljs-built_in">setTimeout</span>(<span class="hljs-function">() =&gt;</span> socket.<span class="hljs-title function_">end</span>(<span class="hljs-string">&#x27;说完了，我也关\n&#x27;</span>), <span class="hljs-number">200</span>); <span class="hljs-comment">// 这才是我的 FIN</span><br>  &#125;);<br>&#125;);<br><br>server.<span class="hljs-title function_">listen</span>(<span class="hljs-number">3000</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>  <span class="hljs-keyword">const</span> client = net.<span class="hljs-title function_">connect</span>(<span class="hljs-number">3000</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>    client.<span class="hljs-title function_">end</span>(<span class="hljs-string">&#x27;客户端：我的数据发完了，先关写端\n&#x27;</span>);     <span class="hljs-comment">// 数据 + FIN 一起发出</span><br>  &#125;);<br>  client.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;data&#x27;</span>, <span class="hljs-function">(<span class="hljs-params">c</span>) =&gt;</span> <span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;client&#x27;</span>, <span class="hljs-string">&#x27;仍能收到: &#x27;</span> + c.<span class="hljs-title function_">toString</span>().<span class="hljs-title function_">trim</span>()));<br>&#125;);<br></code></pre></td></tr></table></figure>
+
+<p>运行输出（真实运行结果）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs text">[client] 已连接，发完数据就关写端<br>[client] 仍能收到: 服务端：连接刚建立时发的数据<br>[server] 收到 FIN，但我这边还有话没说完<br>[client] 仍能收到: 收到你的FIN，我这边还有话没说完<br>[client] 仍能收到: 说完了，我也关<br>[client] 连接完全关闭<br></code></pre></td></tr></table></figure>
+
+<p>客户端发出 FIN 之后，<strong>还在持续收到服务端的数据</strong>——这就是「半关闭」，也是四次挥手的全部秘密。对着状态机走一遍（序号接上文数据阶段的 1006 &#x2F; 5003）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs text">客户端                                       服务端<br>  │ ──① FIN, seq=1006 ─────────────────────► │   &quot;我的数据发完了&quot;<br>  │   FIN_WAIT_1                              │   CLOSE_WAIT（注意：还能发数据！）<br>  │ ◄─② ACK, ack=1007 ────────────────────── │   &quot;知道了&quot;<br>  │   FIN_WAIT_2（半关闭：只收不发）           │<br>  │            ……服务端把剩余数据发完……        │<br>  │ ◄─③ FIN, seq=5003 ─────────────────────── │   &quot;我也发完了&quot;<br>  │   TIME_WAIT                               │   LAST_ACK<br>  │ ──④ ACK, ack=5004 ──────────────────────► │<br>  │   等 2MSL 后 → CLOSED                      │   收到 ACK → CLOSED<br></code></pre></td></tr></table></figure>
+
+<p><strong>为什么是四次而不是三次</strong>：收到对方的 FIN，ACK 必须<strong>立刻</strong>回（这是 TCP 的确认义务）；但自己的 FIN 意味着「我发完了」，要<strong>等应用层把剩余数据写完</strong>才能发。②和③中间隔着「剩余数据」的发送窗口，没法像握手的 SYN+ACK 那样合并成一个包。上面的运行输出里，②和③之间隔了服务端的两条消息——间隔里发生的事，正是多出那一次挥手的原因。</p>
+<p><strong>为什么主动方要等 2MSL（TIME_WAIT）</strong>：</p>
+<ol>
+<li>若④这个 ACK 丢了，服务端会重传 FIN；客户端若已经 CLOSED 就无法应答，服务端将永远停在 LAST_ACK。等 2MSL &#x3D; ACK 去程最多 1 个 MSL + 重传 FIN 回程最多再 1 个 MSL，兜住这次重传；</li>
+<li>让本连接的旧报文在网络上自然消亡，防止污染之后复用同一四元组（同 IP 同端口）的新连接。</li>
+</ol>
+<h3 id="1-4-字节流无边界：应用层协议的起点"><a href="#1-4-字节流无边界：应用层协议的起点" class="headerlink" title="1.4 字节流无边界：应用层协议的起点"></a>1.4 字节流无边界：应用层协议的起点</h3><p>TCP 对上层只交付「一串连续字节」，<strong>写入几次和读取几次没有对应关系</strong>：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">const</span> net = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;net&#x27;</span>);<br><span class="hljs-comment">// 服务端：连着写两条&quot;消息&quot;</span><br>net.<span class="hljs-title function_">createServer</span>(<span class="hljs-function">(<span class="hljs-params">socket</span>) =&gt;</span> &#123;<br>  socket.<span class="hljs-title function_">write</span>(<span class="hljs-string">&#x27;hello&#x27;</span>);<br>  socket.<span class="hljs-title function_">write</span>(<span class="hljs-string">&#x27;world&#x27;</span>);<br>  socket.<span class="hljs-title function_">end</span>();<br>&#125;).<span class="hljs-title function_">listen</span>(<span class="hljs-number">3001</span>);<br><br><span class="hljs-comment">// 客户端</span><br><span class="hljs-keyword">const</span> client = net.<span class="hljs-title function_">connect</span>(<span class="hljs-number">3001</span>);<br>client.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;data&#x27;</span>, <span class="hljs-function">(<span class="hljs-params">c</span>) =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`收到 &quot;<span class="hljs-subst">$&#123;c&#125;</span>&quot;`</span>));<br></code></pre></td></tr></table></figure>
+
+<p>运行输出——两次 <code>write</code> 合并成了一次 <code>data</code>（也可能反过来被拆开，取决于网络）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs text">第 1 次 data 事件, 长度 10: &quot;helloworld&quot;<br></code></pre></td></tr></table></figure>
+
+<p>这不是 bug，是字节流的本性（即所谓粘包&#x2F;拆包）。于是得到贯穿全文的主线：<strong>每个应用层协议的第一件事，都是在无边界的字节流上定义「消息边界」</strong>。接下来三个协议的报文设计，本质是在回答同一个问题：一段字节，从哪开始、到哪结束。</p>
+<h2 id="二、HTTP：用报文规则切出「一问一答」"><a href="#二、HTTP：用报文规则切出「一问一答」" class="headerlink" title="二、HTTP：用报文规则切出「一问一答」"></a>二、HTTP：用报文规则切出「一问一答」</h2><p>HTTP 的边界方案浓缩在一条请求的解析规则里：<strong>头部以 <code>\r\n\r\n</code> 结束，正文长度由 <code>Content-Length</code> 声明</strong>。在裸 TCP 上手写一个解析器，规则立刻具象化：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">const</span> net = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;net&#x27;</span>);<br><br>net.<span class="hljs-title function_">createServer</span>(<span class="hljs-function">(<span class="hljs-params">socket</span>) =&gt;</span> &#123;<br>  <span class="hljs-keyword">let</span> buf = <span class="hljs-title class_">Buffer</span>.<span class="hljs-title function_">alloc</span>(<span class="hljs-number">0</span>);                       <span class="hljs-comment">// 字节流先攒起来</span><br>  socket.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;data&#x27;</span>, <span class="hljs-function">(<span class="hljs-params">chunk</span>) =&gt;</span> &#123;<br>    buf = <span class="hljs-title class_">Buffer</span>.<span class="hljs-title function_">concat</span>([buf, chunk]);<br>    <span class="hljs-keyword">const</span> idx = buf.<span class="hljs-title function_">indexOf</span>(<span class="hljs-string">&#x27;\r\n\r\n&#x27;</span>);           <span class="hljs-comment">// 头部结束标记</span><br>    <span class="hljs-keyword">if</span> (idx === -<span class="hljs-number">1</span>) <span class="hljs-keyword">return</span>;                        <span class="hljs-comment">// 头没到齐：继续等</span><br>    <span class="hljs-keyword">const</span> head = buf.<span class="hljs-title function_">subarray</span>(<span class="hljs-number">0</span>, idx).<span class="hljs-title function_">toString</span>();<br>    <span class="hljs-keyword">const</span> len = <span class="hljs-title class_">Number</span>(<span class="hljs-regexp">/Content-Length: (\d+)/i</span>.<span class="hljs-title function_">exec</span>(head)?.[<span class="hljs-number">1</span>] ?? <span class="hljs-number">0</span>);<br>    <span class="hljs-keyword">if</span> (buf.<span class="hljs-property">length</span> - idx - <span class="hljs-number">4</span> &lt; len) <span class="hljs-keyword">return</span>;        <span class="hljs-comment">// body 没到齐：继续等</span><br>    <span class="hljs-keyword">const</span> body = buf.<span class="hljs-title function_">subarray</span>(idx + <span class="hljs-number">4</span>, idx + <span class="hljs-number">4</span> + len).<span class="hljs-title function_">toString</span>();<br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;--- 解析出完整请求 ---\n&#x27;</span> + head + <span class="hljs-string">&#x27;\n[body] &#x27;</span> + body);<br>    socket.<span class="hljs-title function_">end</span>(<span class="hljs-string">&#x27;HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok&#x27;</span>);<br>  &#125;);<br>&#125;).<span class="hljs-title function_">listen</span>(<span class="hljs-number">3002</span>);<br><br><span class="hljs-comment">// 客户端：故意分两次写，模拟 TCP 分段到达</span><br><span class="hljs-keyword">const</span> client = net.<span class="hljs-title function_">connect</span>(<span class="hljs-number">3002</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>  <span class="hljs-keyword">const</span> body = <span class="hljs-string">&#x27;&#123;&quot;user&quot;:&quot;a&quot;,&quot;pass&quot;:&quot;b&quot;&#125;&#x27;</span>;<br>  <span class="hljs-keyword">const</span> head = <span class="hljs-string">`POST /api/login HTTP/1.1\r\nHost: localhost\r\nContent-Length: <span class="hljs-subst">$&#123;Buffer.byteLength(body)&#125;</span>\r\n\r\n`</span>;<br>  client.<span class="hljs-title function_">write</span>(head);<br>  <span class="hljs-built_in">setTimeout</span>(<span class="hljs-function">() =&gt;</span> client.<span class="hljs-title function_">write</span>(body), <span class="hljs-number">100</span>);       <span class="hljs-comment">// 100ms 后 body 才到</span><br>&#125;);<br></code></pre></td></tr></table></figure>
+
+<p>运行输出——头和 body 分两次到达，解析器靠缓冲 + 边界规则拼出完整请求：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs text">--- 解析出完整请求 ---<br>POST /api/login HTTP/1.1<br>Host: localhost<br>Content-Length: 23<br>[body] &#123;&quot;user&quot;:&quot;a&quot;,&quot;pass&quot;:&quot;b&quot;&#125;<br></code></pre></td></tr></table></figure>
+
+<p>调试这段代码时踩过一个坑，恰好证明这套规则的分量：<code>Content-Length</code> 手写成了 26 而实际 body 是 23 字节，解析器<strong>永远等不齐第 24~26 字节</strong>，连接一挂到底。边界声明差一个字节，整条连接就死掉。</p>
+<p>在此之上是 HTTP 的模型与演进：</p>
+<ul>
+<li><strong>一问一答 + 无状态</strong>：请求永远由客户端发起，协议不记得上一个请求是谁，会话靠 Cookie &#x2F; Token 补；</li>
+<li><strong>keep-alive</strong>（HTTP&#x2F;1.1 默认）：一次对话结束不拆 TCP 连接，下一个请求直接复用。能复用的前提正是边界明确——解析器必须准确知道上一个响应在哪里结束；</li>
+<li><strong>HTTP&#x2F;1.1 队头阻塞</strong>：一条连接上对话必须排队。HTTP&#x2F;2 的解法是把报文拆成<strong>二进制帧</strong>、标记流 ID 交错传输（多路复用）——注意这步和 WebSocket 殊途同归，都转向「帧 + 长度字段」的边界方案；TCP 层的队头阻塞要等 HTTP&#x2F;3 换 QUIC 才解决。</li>
+</ul>
+<p>这个模型的能力边界也由此清楚：<strong>服务端无法主动开口</strong>——这是下面两个协议存在的原因。</p>
+<h2 id="三、SSE：让一次响应永远不结束"><a href="#三、SSE：让一次响应永远不结束" class="headerlink" title="三、SSE：让一次响应永远不结束"></a>三、SSE：让一次响应永远不结束</h2><p>SSE（Server-Sent Events）的思路简单：<strong>正常发起 GET 请求，服务端不写 Content-Length，让响应一直「没结束」，有新消息就往里写一段</strong>。Node.js 十几行实现一个行情推送：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">const</span> http = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;http&#x27;</span>);<br><br>http.<span class="hljs-title function_">createServer</span>(<span class="hljs-function">(<span class="hljs-params">req, res</span>) =&gt;</span> &#123;<br>  <span class="hljs-comment">// 断线重连时浏览器自动带上最后收到的事件 id</span><br>  <span class="hljs-keyword">let</span> id = <span class="hljs-title class_">Number</span>(req.<span class="hljs-property">headers</span>[<span class="hljs-string">&#x27;last-event-id&#x27;</span>] || <span class="hljs-number">0</span>);<br><br>  res.<span class="hljs-title function_">writeHead</span>(<span class="hljs-number">200</span>, &#123;<br>    <span class="hljs-string">&#x27;Content-Type&#x27;</span>: <span class="hljs-string">&#x27;text/event-stream&#x27;</span>,<br>    <span class="hljs-string">&#x27;Cache-Control&#x27;</span>: <span class="hljs-string">&#x27;no-cache&#x27;</span>,<br>  &#125;);<br><br>  <span class="hljs-keyword">const</span> timer = <span class="hljs-built_in">setInterval</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>    <span class="hljs-keyword">const</span> price = (<span class="hljs-number">100</span> + <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">random</span>() * <span class="hljs-number">10</span>).<span class="hljs-title function_">toFixed</span>(<span class="hljs-number">2</span>);<br>    res.<span class="hljs-title function_">write</span>(<span class="hljs-string">`id: <span class="hljs-subst">$&#123;++id&#125;</span>\nevent: price\ndata: <span class="hljs-subst">$&#123;price&#125;</span>\n\n`</span>);<br>  &#125;, <span class="hljs-number">1000</span>);<br><br>  req.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;close&#x27;</span>, <span class="hljs-function">() =&gt;</span> <span class="hljs-built_in">clearInterval</span>(timer));   <span class="hljs-comment">// 客户端断开必须清理</span><br>&#125;).<span class="hljs-title function_">listen</span>(<span class="hljs-number">3000</span>);<br></code></pre></td></tr></table></figure>
+
+<p>线上的数据流（<code>Transfer-Encoding: chunked</code> 分块，永不主动结束）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs text">HTTP/1.1 200 OK<br>Content-Type: text/event-stream<br><br>id: 1<br>event: price<br>data: 104.37<br>                                  ← 空行 = 一个事件结束，这就是 SSE 的消息边界<br>id: 2<br>event: price<br>data: 107.91<br><br></code></pre></td></tr></table></figure>
+
+<p>格式规则：每行是 <code>字段: 值</code>，支持 <code>id</code> &#x2F; <code>event</code> &#x2F; <code>data</code> &#x2F; <code>retry</code>（重连等待毫秒数）；<strong>事件之间用空行分隔</strong>。客户端是原生 API：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">const</span> es = <span class="hljs-keyword">new</span> <span class="hljs-title class_">EventSource</span>(<span class="hljs-string">&#x27;http://localhost:3000&#x27;</span>);<br>es.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">&#x27;price&#x27;</span>, <span class="hljs-function">(<span class="hljs-params">e</span>) =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;最新价格&#x27;</span>, e.<span class="hljs-property">data</span>));<br></code></pre></td></tr></table></figure>
+
+<p>重连机制值得一读：连接断开后 <code>EventSource</code> 自动重试，并把最后收到的 <code>id</code> 放进 <code>Last-Event-ID</code> 请求头——服务端读这个头就能续传（上面服务端代码第一行）。断点续传是协议内建的。能力边界：<strong>单向</strong>（客户端要说话得另发普通请求）、<strong>纯文本</strong>（二进制要 Base64，体积膨胀 1&#x2F;3）、HTTP&#x2F;1.1 下浏览器对同域只开 6 条 TCP 连接（HTTP&#x2F;2 多路复用后无此顾虑）。</p>
+<h2 id="四、WebSocket：握手换协议，边界靠帧"><a href="#四、WebSocket：握手换协议，边界靠帧" class="headerlink" title="四、WebSocket：握手换协议，边界靠帧"></a>四、WebSocket：握手换协议，边界靠帧</h2><p>要双向实时（聊天、协同编辑、联机游戏），「SSE + 普通请求」太别扭。WebSocket 的做法更彻底：<strong>先用 HTTP 发起一次「换协议」谈判，成功后这条 TCP 连接不再说 HTTP</strong>。</p>
+<h3 id="4-1-握手：一次特殊的-HTTP-请求"><a href="#4-1-握手：一次特殊的-HTTP-请求" class="headerlink" title="4.1 握手：一次特殊的 HTTP 请求"></a>4.1 握手：一次特殊的 HTTP 请求</h3><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs text">GET /chat HTTP/1.1<br>Upgrade: websocket                          ← 请求升级协议<br>Connection: Upgrade<br>Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ== ← 随机 16 字节的 Base64<br><br>HTTP/1.1 101 Switching Protocols            ← 101：协议切换成功<br>Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=<br></code></pre></td></tr></table></figure>
+
+<p><code>Sec-WebSocket-Accept</code> 是一次防篡改校验，算法固定，用 Node 起手就能复现：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">const</span> crypto = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;crypto&#x27;</span>);<br><span class="hljs-keyword">const</span> <span class="hljs-variable constant_">GUID</span> = <span class="hljs-string">&#x27;258EAFA5-E914-47DA-95CA-C5AB0DC85B11&#x27;</span>;   <span class="hljs-comment">// 协议规定的固定串</span><br><span class="hljs-keyword">const</span> accept = crypto<br>  .<span class="hljs-title function_">createHash</span>(<span class="hljs-string">&#x27;sha1&#x27;</span>)<br>  .<span class="hljs-title function_">update</span>(<span class="hljs-string">&#x27;dGhlIHNhbXBsZSBub25jZQ==&#x27;</span> + <span class="hljs-variable constant_">GUID</span>)          <span class="hljs-comment">// key + GUID 做 SHA-1</span><br>  .<span class="hljs-title function_">digest</span>(<span class="hljs-string">&#x27;base64&#x27;</span>);<br><span class="hljs-comment">// → s3pPLMBiTxaQ9kYGzzhZRbK+xOo=，与响应头一致</span><br><span class="hljs-comment">// 双方各自计算比对，确保中间的代理没有篡改握手</span><br></code></pre></td></tr></table></figure>
+
+<h3 id="4-2-帧：逐字节分析边界方案"><a href="#4-2-帧：逐字节分析边界方案" class="headerlink" title="4.2 帧：逐字节分析边界方案"></a>4.2 帧：逐字节分析边界方案</h3><p>握手之后，字节流上跑的换成 WebSocket 帧。先看真实字节——服务端发一个 <code>&quot;Hello&quot;</code>，线上就是这 7 个：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs text">81 05 48 65 6c 6c 6f<br>│  │  └────────┬────────┘<br>│  │        &quot;Hello&quot; 的 ASCII<br>│  └ Payload len = 5（无掩码）<br>└ FIN=1 且 opcode=0x1（文本帧，单帧即完整消息）<br></code></pre></td></tr></table></figure>
+
+<p>帧头各字段的职责：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>FIN</td>
+<td>1 表示消息的最后一帧（大消息可分片）</td>
+</tr>
+<tr>
+<td>opcode</td>
+<td><code>0x1</code> 文本、<code>0x2</code> 二进制、<code>0x0</code> 延续帧、<code>0x8</code> 关闭、<code>0x9</code> ping、<code>0xA</code> pong</td>
+</tr>
+<tr>
+<td>MASK</td>
+<td>是否掩码。<strong>客户端发的帧必须掩码，服务端发的不掩码</strong>（防中间代理被恶意客户端欺骗解析）</td>
+</tr>
+<tr>
+<td>Payload len</td>
+<td>7 位存长度；不够用时置 126 &#x2F; 127，再跟 2 或 8 字节扩展长度</td>
+</tr>
+</tbody></table>
+<p>按这套规则手写解码器，粘包在此天然解决——读完帧头知道长度，收满即一条完整消息：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">function</span> <span class="hljs-title function_">decodeFrame</span>(<span class="hljs-params">buf</span>) &#123;<br>  <span class="hljs-keyword">const</span> fin = (buf[<span class="hljs-number">0</span>] &amp; <span class="hljs-number">0x80</span>) !== <span class="hljs-number">0</span>;       <span class="hljs-comment">// 最高位</span><br>  <span class="hljs-keyword">const</span> opcode = buf[<span class="hljs-number">0</span>] &amp; <span class="hljs-number">0x0f</span>;            <span class="hljs-comment">// 低 4 位</span><br>  <span class="hljs-keyword">const</span> masked = (buf[<span class="hljs-number">1</span>] &amp; <span class="hljs-number">0x80</span>) !== <span class="hljs-number">0</span>;<br>  <span class="hljs-keyword">let</span> len = buf[<span class="hljs-number">1</span>] &amp; <span class="hljs-number">0x7f</span>;<br>  <span class="hljs-keyword">let</span> offset = <span class="hljs-number">2</span>;<br>  <span class="hljs-keyword">if</span> (len === <span class="hljs-number">126</span>) &#123; len = buf.<span class="hljs-title function_">readUInt16BE</span>(offset); offset += <span class="hljs-number">2</span>; &#125;<br>  <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (len === <span class="hljs-number">127</span>) &#123; len = <span class="hljs-title class_">Number</span>(buf.<span class="hljs-title function_">readBigUInt64BE</span>(offset)); offset += <span class="hljs-number">8</span>; &#125;<br>  <span class="hljs-keyword">let</span> mask = <span class="hljs-literal">null</span>;<br>  <span class="hljs-keyword">if</span> (masked) &#123; mask = buf.<span class="hljs-title function_">subarray</span>(offset, offset + <span class="hljs-number">4</span>); offset += <span class="hljs-number">4</span>; &#125;<br>  <span class="hljs-keyword">const</span> payload = buf.<span class="hljs-title function_">subarray</span>(offset, offset + len);<br>  <span class="hljs-keyword">if</span> (mask) <span class="hljs-keyword">for</span> (<span class="hljs-keyword">let</span> i = <span class="hljs-number">0</span>; i &lt; payload.<span class="hljs-property">length</span>; i++) payload[i] ^= mask[i % <span class="hljs-number">4</span>];  <span class="hljs-comment">// 异或解掩码</span><br>  <span class="hljs-keyword">return</span> &#123; fin, opcode, masked, <span class="hljs-attr">data</span>: payload.<span class="hljs-title function_">toString</span>() &#125;;<br>&#125;<br><br><span class="hljs-comment">// 验证：服务端帧 &quot;Hello&quot;（无掩码）</span><br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-title function_">decodeFrame</span>(<span class="hljs-title class_">Buffer</span>.<span class="hljs-title function_">from</span>([<span class="hljs-number">0x81</span>, <span class="hljs-number">0x05</span>, ...<span class="hljs-title class_">Buffer</span>.<span class="hljs-title function_">from</span>(<span class="hljs-string">&#x27;Hello&#x27;</span>)])));<br></code></pre></td></tr></table></figure>
+
+<p>运行输出（含一个真实构造的掩码客户端帧 <code>81 82 37fa213d 7f93</code>，第二字节 <code>82</code> 的最高位就是 MASK&#x3D;1）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs text">服务端帧 : 810548656c6c6f<br>解码结果 : &#123; fin: true, opcode: 1, masked: false, data: &#x27;Hello&#x27; &#125;<br>客户端帧 : 818237fa213d7f93<br>解码结果 : &#123; fin: true, opcode: 1, masked: true, data: &#x27;Hi&#x27; &#125;<br></code></pre></td></tr></table></figure>
+
+<p>心跳也是帧：一方发 opcode&#x3D;0x9 的 ping，另一方必须回 0xA 的 pong，超时无响应即可判定连接已死。实际开发用 <code>ws</code> 库，不必手撕：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">const</span> &#123; <span class="hljs-title class_">WebSocketServer</span> &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;ws&#x27;</span>);          <span class="hljs-comment">// 服务端</span><br><span class="hljs-keyword">const</span> wss = <span class="hljs-keyword">new</span> <span class="hljs-title class_">WebSocketServer</span>(&#123; <span class="hljs-attr">port</span>: <span class="hljs-number">3000</span> &#125;);<br>wss.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;connection&#x27;</span>, <span class="hljs-function">(<span class="hljs-params">ws</span>) =&gt;</span> &#123;<br>  ws.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;message&#x27;</span>, <span class="hljs-function">(<span class="hljs-params">data</span>) =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;收到&#x27;</span>, data.<span class="hljs-title function_">toString</span>()));<br>  ws.<span class="hljs-title function_">send</span>(<span class="hljs-string">&#x27;welcome&#x27;</span>);<br>&#125;);<br></code></pre></td></tr></table></figure>
+
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">const</span> ws = <span class="hljs-keyword">new</span> <span class="hljs-title class_">WebSocket</span>(<span class="hljs-string">&#x27;ws://localhost:3000&#x27;</span>);    <span class="hljs-comment">// 客户端（浏览器原生）</span><br>ws.<span class="hljs-property">onmessage</span> = <span class="hljs-function">(<span class="hljs-params">e</span>) =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(e.<span class="hljs-property">data</span>);<br>ws.<span class="hljs-title function_">send</span>(<span class="hljs-string">&#x27;hello&#x27;</span>);<br></code></pre></td></tr></table></figure>
+
+<p>代价是<strong>脱离 HTTP 生态</strong>：没有状态码、缓存、Content-Type 语义，鉴权要塞进 URL 或首条消息，断线重连、心跳都要自己实现。</p>
+<h2 id="五、怎么选"><a href="#五、怎么选" class="headerlink" title="五、怎么选"></a>五、怎么选</h2><table>
+<thead>
+<tr>
+<th></th>
+<th>HTTP</th>
+<th>SSE</th>
+<th>WebSocket</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>通信方向</td>
+<td>一问一答</td>
+<td>服务端 → 客户端单向流</td>
+<td>全双工</td>
+</tr>
+<tr>
+<td>底层依赖</td>
+<td>TCP</td>
+<td>普通 HTTP 长响应（chunked）</td>
+<td>TCP（HTTP 握手后换帧协议）</td>
+</tr>
+<tr>
+<td>消息边界</td>
+<td><code>Content-Length</code> &#x2F; chunked</td>
+<td>事件间空行</td>
+<td>帧头 Payload len</td>
+</tr>
+<tr>
+<td>数据格式</td>
+<td>任意</td>
+<td>纯文本</td>
+<td>文本 + 二进制</td>
+</tr>
+<tr>
+<td>断线重连</td>
+<td>—</td>
+<td>内建（Last-Event-ID 续传）</td>
+<td>自己写</td>
+</tr>
+<tr>
+<td>典型场景</td>
+<td>常规 API、静态资源</td>
+<td>通知、行情、构建进度、AI 流式输出</td>
+<td>聊天、协同编辑、联机游戏</td>
+</tr>
+</tbody></table>
+<p><strong>普通的用 HTTP；只需要服务端推、客户端无需实时回话的用 SSE；双端都要高频互发的才上 WebSocket。</strong> 能用 SSE 就别上 WebSocket——它就是个不结束的 HTTP 响应，代理、CDN、鉴权全部白嫖 HTTP 生态。</p>
+<h2 id="六、总结"><a href="#六、总结" class="headerlink" title="六、总结"></a>六、总结</h2><p>一条线索贯穿四个协议——<strong>在 TCP 无边界的字节流上，各自如何定义消息</strong>：</p>
+<ul>
+<li>TCP 用 seq&#x2F;ack + 重传交付有序字节，握手交换初始序号，挥手按方向各自关闭（FIN 只关写端，所以是四次）；</li>
+<li>HTTP 用 <code>\r\n\r\n</code> 切头部、<code>Content-Length</code> &#x2F; chunked 切正文，换得一问一答的确定性；</li>
+<li>SSE 借 chunked 让响应不结束，用空行切事件，把「响应」变成「事件流」；</li>
+<li>WebSocket 用 Upgrade 握手接管连接，用帧头长度字段切消息，把「对话」变成「双向管道」。</li>
+</ul>
+<p>方向性上是三个台阶：一问一答 → 单向推送 → 全双工。理解了「边界」和「方向」这两个维度，四个协议就不再是名词，而是同一根管道上的四种用法。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io">StellaCode98</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io/2026/09/10/network-tcp-http-websocket-sse/">https://stellacode98.github.io/2026/09/10/network-tcp-http-websocket-sse/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://stellacode98.github.io" target="_blank">眉眼如初、</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/SSE/">SSE</a><a class="post-meta__tags" href="/tags/%E7%BD%91%E7%BB%9C/">网络</a><a class="post-meta__tags" href="/tags/TCP/">TCP</a><a class="post-meta__tags" href="/tags/HTTP/">HTTP</a><a class="post-meta__tags" href="/tags/WebSocket/">WebSocket</a></div><div class="post-share"><div class="social-share" data-image="/img/avatar.jpg" data-sites="wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/09/10/spa-first-screen-optimization/" title="SPA 首屏优化：减体积、抢网络、缩白屏"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">SPA 首屏优化：减体积、抢网络、缩白屏</div></div><div class="info-2"><div class="info-item-1">SPA 首屏慢的根源是结构性的：HTML 里只有一个空的 &lt;div id=&quot;app&quot;&gt;，一切内容都要等 JS 下载、解析、执行完才能出现。所以优化逃不出三个方向：  减体积——让首屏只下载首屏需要的代码；抢网络——让必须传的字节更快到达；缩白屏——让 JS 接管之前，用户就有东西可看。  先把时间线摆出来，慢在哪一段，就用哪一段的手段： 1234导航开始 ─► TTFB ─► HTML 到达 ─► JS/CSS 下载 ─► 解析执行 ─► 首屏渲染 ─► 首屏接口返回 ─► 内容完整             │                    │               │            │              │          服务端慢？           体积/网络？        长任务？      接口串行？          (后端/SSR)          (减体积/抢网络)    (拆任务)     (并行/预取)    一、先量化，再优化不测量就优化，等于蒙眼开药。三个核心指标：  FCP（First...</div></div></div></a><a class="pagination-related" href="/2026/09/10/javascript-debounce-throttle/" title="手写防抖与节流：30 行核心代码，讲清两件事"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">手写防抖与节流：30 行核心代码，讲清两件事</div></div><div class="info-2"><div class="info-item-1">scroll、resize、input、mousemove 这类事件一秒能触发几十上百次，处理器跟不上就是卡顿。防抖和节流做的事情一样——降频，但策略相反：  防抖（debounce）：等你停了我再做。 每次触发都重新计时，只有安静了 wait 毫秒才执行，持续触发期间一次都不跑。节流（throttle）：再急也按固定节奏做。 不管触发多频繁，每个 wait 窗口内最多执行一次。  电梯类比：防抖是「有人进来就重新等，没人再进才关门」；节流是「观光车每 10 分钟发一班，到点就走」。   一、手写防抖基础版核心就一招：用闭包存住定时器，每次触发先把上一个清掉。 123456789101112function debounce(fn, wait) &#123;  let timer = null;  return function (...args) &#123;    if (timer) clearTimeout(timer);   // 上一次作废，重新计时    timer = setTimeout(() =&gt; &#123;      fn.apply(this, a...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/09/09/ai-from-streaming/" title="前端工程师的 AI 入门：从流式接口到落地一个 AI 应用"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">前端工程师的 AI 入门：从流式接口到落地一个 AI 应用</div></div><div class="info-2"><div class="info-item-1"> 这篇文章不是概念科普，而是一次真实的落地复盘。最近我在自己的 Vue3 后台管理项目（vue3_admin）里完整实现了一个 AI 智能问答模块：支持 SSE 流式打字机输出、多轮对话记忆、Function Calling 工具调用、可视化组件渲染、会话持久化。本文把这条链路从头到尾拆开讲——为什么需要流式、前端怎么手写 SSE 解析器、Function Calling 的两轮循环到底转了什么、以及从 demo 到可用应用之间隔着哪些工程细节。所有代码都来自这个真实模块，文末附完整文件地图。  目录 0. 前言：前端工程师离 AI 应用有多远 1. 认识流式接口：AI 的回复为什么是”蹦”出来的 2. 服务端：把模型的流转发给浏览器 3. 前端：手写一个 SSE 解析器 4. 从”流”到”聊天界面”：状态编排层 5. 让 AI 用上你的函数：Function Calling 6. 落地成应用：demo 和工程之间隔着什么 7. 展望：MCP 离我们还有多远 8. 写在最后   0. 前言：前端工程师离 AI 应用有多远打开 ChatGPT 或者任何 AI 对话产品，仔细观察它的...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">StellaCode98</div><div class="author-info-description">记录前端学习与开发中的思考</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">21</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">77</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">16</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/kxl-823"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/kxl-823" target="_blank" title="GitHub"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">欢迎来到我的小站，这里记录我的学习笔记与实践心得</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81TCP%EF%BC%9A%E4%B8%80%E6%A0%B9%E6%B2%A1%E6%9C%89%E6%B6%88%E6%81%AF%E8%BE%B9%E7%95%8C%E7%9A%84%E5%AD%97%E8%8A%82%E6%B5%81"><span class="toc-number">1.</span> <span class="toc-text">一、TCP：一根没有消息边界的字节流</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-%E5%85%88%E6%90%9E%E6%87%82-seq-%E5%92%8C-ack%EF%BC%8C%E6%8F%A1%E6%89%8B%E6%89%8D%E7%9C%8B%E5%BE%97%E6%87%82"><span class="toc-number">1.1.</span> <span class="toc-text">1.1 先搞懂 seq 和 ack，握手才看得懂</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-%E4%B8%89%E6%AC%A1%E6%8F%A1%E6%89%8B%EF%BC%9A%E4%BA%A4%E6%8D%A2%E7%9A%84%E4%B8%8D%E6%98%AF%E6%95%B0%E6%8D%AE%EF%BC%8C%E6%98%AF%E5%88%9D%E5%A7%8B%E5%BA%8F%E5%8F%B7"><span class="toc-number">1.2.</span> <span class="toc-text">1.2 三次握手：交换的不是数据，是初始序号</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-3-%E5%9B%9B%E6%AC%A1%E6%8C%A5%E6%89%8B%EF%BC%9AFIN-%E5%8F%AA%E5%85%B3%E4%B8%80%E4%B8%AA%E6%96%B9%E5%90%91"><span class="toc-number">1.3.</span> <span class="toc-text">1.3 四次挥手：FIN 只关一个方向</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-4-%E5%AD%97%E8%8A%82%E6%B5%81%E6%97%A0%E8%BE%B9%E7%95%8C%EF%BC%9A%E5%BA%94%E7%94%A8%E5%B1%82%E5%8D%8F%E8%AE%AE%E7%9A%84%E8%B5%B7%E7%82%B9"><span class="toc-number">1.4.</span> <span class="toc-text">1.4 字节流无边界：应用层协议的起点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81HTTP%EF%BC%9A%E7%94%A8%E6%8A%A5%E6%96%87%E8%A7%84%E5%88%99%E5%88%87%E5%87%BA%E3%80%8C%E4%B8%80%E9%97%AE%E4%B8%80%E7%AD%94%E3%80%8D"><span class="toc-number">2.</span> <span class="toc-text">二、HTTP：用报文规则切出「一问一答」</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81SSE%EF%BC%9A%E8%AE%A9%E4%B8%80%E6%AC%A1%E5%93%8D%E5%BA%94%E6%B0%B8%E8%BF%9C%E4%B8%8D%E7%BB%93%E6%9D%9F"><span class="toc-number">3.</span> <span class="toc-text">三、SSE：让一次响应永远不结束</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81WebSocket%EF%BC%9A%E6%8F%A1%E6%89%8B%E6%8D%A2%E5%8D%8F%E8%AE%AE%EF%BC%8C%E8%BE%B9%E7%95%8C%E9%9D%A0%E5%B8%A7"><span class="toc-number">4.</span> <span class="toc-text">四、WebSocket：握手换协议，边界靠帧</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-%E6%8F%A1%E6%89%8B%EF%BC%9A%E4%B8%80%E6%AC%A1%E7%89%B9%E6%AE%8A%E7%9A%84-HTTP-%E8%AF%B7%E6%B1%82"><span class="toc-number">4.1.</span> <span class="toc-text">4.1 握手：一次特殊的 HTTP 请求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-%E5%B8%A7%EF%BC%9A%E9%80%90%E5%AD%97%E8%8A%82%E5%88%86%E6%9E%90%E8%BE%B9%E7%95%8C%E6%96%B9%E6%A1%88"><span class="toc-number">4.2.</span> <span class="toc-text">4.2 帧：逐字节分析边界方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E6%80%8E%E4%B9%88%E9%80%89"><span class="toc-number">5.</span> <span class="toc-text">五、怎么选</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E6%80%BB%E7%BB%93"><span class="toc-number">6.</span> <span class="toc-text">六、总结</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/spa-first-screen-practice/" title="SPA 首屏优化落地实录：大屏项目的路由分割、依赖分包与异步引擎加载">SPA 首屏优化落地实录：大屏项目的路由分割、依赖分包与异步引擎加载</a><time datetime="2026-09-10T07:00:00.000Z" title="发表于 2026-09-10 15:00:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/webpack-vs-rollup/" title="Webpack 与 Rollup：一个为应用而生，一个为库而生">Webpack 与 Rollup：一个为应用而生，一个为库而生</a><time datetime="2026-09-10T06:00:00.000Z" title="发表于 2026-09-10 14:00:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/spa-first-screen-optimization/" title="SPA 首屏优化：减体积、抢网络、缩白屏">SPA 首屏优化：减体积、抢网络、缩白屏</a><time datetime="2026-09-10T03:00:00.000Z" title="发表于 2026-09-10 11:00:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/network-tcp-http-websocket-sse/" title="TCP、HTTP、WebSocket 与 SSE：一根管道上的四种用法">TCP、HTTP、WebSocket 与 SSE：一根管道上的四种用法</a><time datetime="2026-09-10T02:46:00.000Z" title="发表于 2026-09-10 10:46:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/javascript-debounce-throttle/" title="手写防抖与节流：30 行核心代码，讲清两件事">手写防抖与节流：30 行核心代码，讲清两件事</a><time datetime="2026-09-10T02:00:00.000Z" title="发表于 2026-09-10 10:00:00">2026-09-10</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By StellaCode98</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.2</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.7.0</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><div class="js-pjax"></div><video id="site-video" src="/video/gufeng-snow.mp4" poster="/img/gufeng-girl.webp" autoplay loop muted playsinline disablepictureinpicture></video><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></div></body></html>

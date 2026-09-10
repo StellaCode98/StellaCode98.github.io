@@ -1,0 +1,374 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>SPA 首屏优化落地实录：大屏项目的路由分割、依赖分包与异步引擎加载 | 眉眼如初、</title><meta name="author" content="StellaCode98"><meta name="copyright" content="StellaCode98"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="上一篇讲了 SPA 首屏优化的理论清单——减体积、抢网络、缩白屏。这篇拿一个真实的数据可视化大屏项目逐条对照：路由全量懒加载、manualChunks 五路分包配 contenthash、数百 KB 的地图引擎动态 import 移出关键路径、面板组件 defineAsyncComponent 按需挂载、preconnect 提前握手底图 CDN、首屏接口 Promise.all 并行加单例防重，">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SPA 首屏优化落地实录：大屏项目的路由分割、依赖分包与异步引擎加载">
+<meta property="og:url" content="https://stellacode98.github.io/2026/09/10/spa-first-screen-practice/index.html">
+<meta property="og:site_name" content="眉眼如初、">
+<meta property="og:description" content="上一篇讲了 SPA 首屏优化的理论清单——减体积、抢网络、缩白屏。这篇拿一个真实的数据可视化大屏项目逐条对照：路由全量懒加载、manualChunks 五路分包配 contenthash、数百 KB 的地图引擎动态 import 移出关键路径、面板组件 defineAsyncComponent 按需挂载、preconnect 提前握手底图 CDN、首屏接口 Promise.all 并行加单例防重，">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://stellacode98.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-09-10T07:00:00.000Z">
+<meta property="article:modified_time" content="2026-09-10T03:05:24.791Z">
+<meta property="article:author" content="StellaCode98">
+<meta property="article:tag" content="SPA">
+<meta property="article:tag" content="vite">
+<meta property="article:tag" content="vue3">
+<meta property="article:tag" content="性能优化">
+<meta property="article:tag" content="首屏">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://stellacode98.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "SPA 首屏优化落地实录：大屏项目的路由分割、依赖分包与异步引擎加载",
+  "url": "https://stellacode98.github.io/2026/09/10/spa-first-screen-practice/",
+  "image": "https://stellacode98.github.io/img/avatar.jpg",
+  "datePublished": "2026-09-10T07:00:00.000Z",
+  "dateModified": "2026-09-10T03:05:24.791Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "StellaCode98",
+      "url": "https://stellacode98.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.ico"><link rel="canonical" href="https://stellacode98.github.io/2026/09/10/spa-first-screen-practice/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'SPA 首屏优化落地实录：大屏项目的路由分割、依赖分包与异步引擎加载',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/bg-video.css"><link rel="stylesheet" href="/css/gufeng-soft.css"><meta name="generator" content="Hexo 8.1.2"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">21</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">77</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">16</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/gufeng-girl.webp);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">眉眼如初、</span></a><a class="nav-page-title" href="/"><span class="site-name">SPA 首屏优化落地实录：大屏项目的路由分割、依赖分包与异步引擎加载</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">SPA 首屏优化落地实录：大屏项目的路由分割、依赖分包与异步引擎加载</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-10T07:00:00.000Z" title="发表于 2026-09-10 15:00:00">2026-09-10</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-10T03:05:24.791Z" title="更新于 2026-09-10 11:05:24">2026-09-10</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%89%8D%E7%AB%AF%E5%9F%BA%E7%A1%80/">前端基础</a><i class="fas fa-angle-right post-meta-separator"></i><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%89%8D%E7%AB%AF%E5%9F%BA%E7%A1%80/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/">性能优化</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p>上一篇<a href="/2026/09/10/spa-first-screen-optimization/">《SPA 首屏优化：减体积、抢网络、缩白屏》</a>把理论清单列全了。这篇是它的落地篇——我拿手头一个数据可视化大屏项目（Vue 3 + Vite + MapLibre GL）逐条对照那份清单，<strong>有代码支撑的讲透实现，没落地的在文末如实记账</strong>。</p>
+<p>先说这个项目的特殊性，它决定了优化的重心：大屏首屏最大的包袱不是业务代码，而是<strong>地图引擎</strong>——maplibre-gl 光 JS 就数百 KB，还有一份全量 CSS；其次才是 Element Plus 和一堆面板组件。所以整个优化围绕一句话展开：<strong>首屏关键路径上只留「能让地图出现的最小集合」，其余全部异步化</strong>。</p>
+<p>先给核对结论，再逐条展开：</p>
+<table>
+<thead>
+<tr>
+<th>理论手段</th>
+<th>项目落地</th>
+<th>位置</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>路由级代码分割</td>
+<td>✅ 全部路由懒加载（含布局组件）</td>
+<td><code>router/index.ts</code></td>
+</tr>
+<tr>
+<td>依赖分包 + 长缓存</td>
+<td>✅ manualChunks 五路分包 + contenthash</td>
+<td><code>vite.config.ts</code></td>
+</tr>
+<tr>
+<td>重型依赖按需&#x2F;异步引入</td>
+<td>✅ 地图引擎 JS&#x2F;CSS&#x2F;协议全部动态 import</td>
+<td><code>main.ts</code> &#x2F; <code>MapContainer.vue</code></td>
+</tr>
+<tr>
+<td>组件级懒加载</td>
+<td>✅ defineAsyncComponent 挂面板</td>
+<td><code>views/Home</code></td>
+</tr>
+<tr>
+<td>UI 库按需引入</td>
+<td>⚠️ 图标按需注册，组件全量（见文末）</td>
+<td><code>main.ts</code></td>
+</tr>
+<tr>
+<td>资源提示 preconnect</td>
+<td>✅ 底图 CDN 域名预连接</td>
+<td><code>index.html</code></td>
+</tr>
+<tr>
+<td>数据预取&#x2F;缓存</td>
+<td>✅ 底图样式预取 + force-cache</td>
+<td><code>stores/map.ts</code></td>
+</tr>
+<tr>
+<td>首屏接口并行</td>
+<td>✅ Promise.all + 单例防重</td>
+<td><code>stores/layer.ts</code></td>
+</tr>
+<tr>
+<td>白屏期反馈</td>
+<td>✅ 分阶段加载进度（组件级）</td>
+<td><code>MapContainer.vue</code></td>
+</tr>
+</tbody></table>
+<span id="more"></span>
+
+<h2 id="一、减体积：三层异步化"><a href="#一、减体积：三层异步化" class="headerlink" title="一、减体积：三层异步化"></a>一、减体积：三层异步化</h2><h3 id="1-路由懒加载：连布局都不放进首屏"><a href="#1-路由懒加载：连布局都不放进首屏" class="headerlink" title="1. 路由懒加载：连布局都不放进首屏"></a>1. 路由懒加载：连布局都不放进首屏</h3><p>理论篇说过，路由分割的收益是「其他路由不再拖累首页」。这个项目做得比较彻底——<strong>所有路由组件，包括多个路由共享的 MainLayout，全部走动态 import</strong>：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">const</span> <span class="hljs-title function_">MainLayout</span> = (<span class="hljs-params"></span>) =&gt; <span class="hljs-keyword">import</span>(<span class="hljs-string">&#x27;@/layouts/MainLayout.vue&#x27;</span>)<br><br><span class="hljs-keyword">const</span> <span class="hljs-attr">routes</span>: <span class="hljs-title class_">RouteRecordRaw</span>[] = [<br>  &#123;<br>    <span class="hljs-attr">path</span>: <span class="hljs-string">&#x27;/login&#x27;</span>,<br>    <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;Login&#x27;</span>,<br>    <span class="hljs-attr">component</span>: <span class="hljs-function">() =&gt;</span> <span class="hljs-keyword">import</span>(<span class="hljs-string">&#x27;@/views/Login/index.vue&#x27;</span>),<br>    <span class="hljs-attr">meta</span>: &#123; <span class="hljs-attr">requiresAuth</span>: <span class="hljs-literal">false</span>, <span class="hljs-attr">title</span>: <span class="hljs-string">&#x27;登录&#x27;</span> &#125;,<br>  &#125;,<br>  &#123;<br>    <span class="hljs-attr">path</span>: <span class="hljs-string">&#x27;/&#x27;</span>,<br>    <span class="hljs-attr">component</span>: <span class="hljs-title class_">MainLayout</span>,<br>    <span class="hljs-attr">children</span>: [<br>      &#123; <span class="hljs-attr">path</span>: <span class="hljs-string">&#x27;&#x27;</span>, <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;Home&#x27;</span>, <span class="hljs-attr">component</span>: <span class="hljs-function">() =&gt;</span> <span class="hljs-keyword">import</span>(<span class="hljs-string">&#x27;@/views/Home/index.vue&#x27;</span>) &#125;,<br>    ],<br>  &#125;,<br>  &#123;<br>    <span class="hljs-attr">path</span>: <span class="hljs-string">&#x27;/system&#x27;</span>,<br>    <span class="hljs-attr">component</span>: <span class="hljs-title class_">MainLayout</span>,<br>    <span class="hljs-attr">children</span>: [<br>      &#123; <span class="hljs-attr">path</span>: <span class="hljs-string">&#x27;user&#x27;</span>, <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;SystemUser&#x27;</span>, <span class="hljs-attr">component</span>: <span class="hljs-function">() =&gt;</span> <span class="hljs-keyword">import</span>(<span class="hljs-string">&#x27;@/views/System/User.vue&#x27;</span>) &#125;,<br>      <span class="hljs-comment">// 设施管理、样式配置、分析报表……十余个路由，全部同款写法</span><br>    ],<br>  &#125;,<br>]<br></code></pre></td></tr></table></figure>
+
+<p>两个细节：MainLayout 被多个路由引用时，Rollup 会自动提取成共享 chunk，各路由并行预加载，不会重复下载；管理后台那十几个页面（用户&#x2F;角色&#x2F;日志&#x2F;数据上传）对只看大屏首屏的用户来说<strong>一个字节都不该下载</strong>——懒加载后它们各自躺在独立的 chunk 里，访问到才拉取。</p>
+<h3 id="2-依赖分包：五路-manualChunks-contenthash"><a href="#2-依赖分包：五路-manualChunks-contenthash" class="headerlink" title="2. 依赖分包：五路 manualChunks + contenthash"></a>2. 依赖分包：五路 manualChunks + contenthash</h3><figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-comment">// vite.config.ts</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">default</span> <span class="hljs-title function_">defineConfig</span>(&#123;<br>  <span class="hljs-attr">build</span>: &#123;<br>    <span class="hljs-attr">cssCodeSplit</span>: <span class="hljs-literal">true</span>,               <span class="hljs-comment">// CSS 代码分割</span><br>    <span class="hljs-attr">chunkSizeWarningLimit</span>: <span class="hljs-number">1000</span>,<br>    <span class="hljs-attr">rollupOptions</span>: &#123;<br>      <span class="hljs-attr">output</span>: &#123;<br>        <span class="hljs-comment">// 手动分包策略</span><br>        <span class="hljs-attr">manualChunks</span>: &#123;<br>          <span class="hljs-string">&#x27;vue-vendor&#x27;</span>: [<span class="hljs-string">&#x27;vue&#x27;</span>, <span class="hljs-string">&#x27;vue-router&#x27;</span>, <span class="hljs-string">&#x27;pinia&#x27;</span>],        <span class="hljs-comment">// 框架核心</span><br>          <span class="hljs-string">&#x27;element-plus&#x27;</span>: [<span class="hljs-string">&#x27;element-plus&#x27;</span>, <span class="hljs-string">&#x27;@element-plus/icons-vue&#x27;</span>],  <span class="hljs-comment">// UI 库</span><br>          <span class="hljs-string">&#x27;maplibre&#x27;</span>: [<span class="hljs-string">&#x27;maplibre-gl&#x27;</span>],                          <span class="hljs-comment">// 地图引擎</span><br>          <span class="hljs-string">&#x27;chat-ui&#x27;</span>: [<span class="hljs-string">&#x27;vue-element-plus-x&#x27;</span>],                    <span class="hljs-comment">// AI 聊天组件</span><br>          <span class="hljs-string">&#x27;http&#x27;</span>: [<span class="hljs-string">&#x27;axios&#x27;</span>],                                    <span class="hljs-comment">// HTTP 工具</span><br>        &#125;,<br>        <span class="hljs-comment">// 文件命名策略：contenthash 打头</span><br>        <span class="hljs-attr">chunkFileNames</span>: <span class="hljs-string">&#x27;js/[name]-[hash].js&#x27;</span>,<br>        <span class="hljs-attr">entryFileNames</span>: <span class="hljs-string">&#x27;js/[name]-[hash].js&#x27;</span>,<br>        <span class="hljs-attr">assetFileNames</span>: <span class="hljs-string">&#x27;[ext]/[name]-[hash].[ext]&#x27;</span>,<br>      &#125;,<br>    &#125;,<br>    <span class="hljs-attr">minify</span>: <span class="hljs-string">&#x27;esbuild&#x27;</span>,<br>  &#125;,<br>&#125;)<br></code></pre></td></tr></table></figure>
+
+<p>分包的划分逻辑是<strong>变更频率</strong>：<code>vue-vendor</code> 几乎永不发版（缓存常年有效），<code>element-plus</code> 跟随 UI 库升级偶尔变，业务 chunk 天天变。配合 <code>[hash]</code> 文件名，理论篇那条「HTML 不缓存 → 拿最新 hash → 没变的 chunk 走强缓存」的闭环就有了物理基础——改一行业务代码，用户重新下载的只有业务 chunk 和 HTML。</p>
+<p><code>&#39;http&#39;: [&#39;axios&#39;]</code> 这种小分包值得单说：axios 本身只有十几 KB，单独拆出来不是为了体积，而是它被<strong>入口和所有异步路由共同依赖</strong>，不拆就会被打进某个大 chunk，别的 chunk 引用它时重复打包。拆出来变成公共依赖，谁加载都命中同一个文件（和同一份缓存）。</p>
+<h3 id="3-地图引擎异步加载：本项目最值钱的一刀"><a href="#3-地图引擎异步加载：本项目最值钱的一刀" class="headerlink" title="3. 地图引擎异步加载：本项目最值钱的一刀"></a>3. 地图引擎异步加载：本项目最值钱的一刀</h3><p>maplibre-gl 是全项目最大的单体依赖。三处异步化把它彻底移出首屏关键路径：</p>
+<p><strong>CSS 不阻塞首屏</strong>——入口文件里用动态 import，样式变成异步 chunk，浏览器不会因为它阻塞渲染：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-comment">// main.ts</span><br><span class="hljs-comment">// maplibre-gl CSS 懒加载，避免阻塞首屏</span><br><span class="hljs-keyword">import</span>(<span class="hljs-string">&#x27;maplibre-gl/dist/maplibre-gl.css&#x27;</span>)<br></code></pre></td></tr></table></figure>
+
+<p><strong>JS 在地图容器挂载时才加载</strong>——用模块级变量做单例缓存，加载一次后续复用：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-comment">// MapContainer.vue</span><br><span class="hljs-keyword">let</span> <span class="hljs-attr">maplibregl</span>: <span class="hljs-keyword">typeof</span> <span class="hljs-keyword">import</span>(<span class="hljs-string">&#x27;maplibre-gl&#x27;</span>).<span class="hljs-property">default</span> | <span class="hljs-literal">null</span> = <span class="hljs-literal">null</span><br><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">loadMapLibre</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-keyword">if</span> (!maplibregl) &#123;<br>    <span class="hljs-keyword">const</span> mod = <span class="hljs-keyword">await</span> <span class="hljs-keyword">import</span>(<span class="hljs-string">&#x27;maplibre-gl&#x27;</span>)   <span class="hljs-comment">// 数百 KB 的引擎，此刻才下载</span><br>    maplibregl = mod.<span class="hljs-property">default</span><br>  &#125;<br>  <span class="hljs-keyword">return</span> maplibregl<br>&#125;<br><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">initMap</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-keyword">if</span> (!mapRef.<span class="hljs-property">value</span>) <span class="hljs-keyword">return</span><br>  loadingStage.<span class="hljs-property">value</span> = <span class="hljs-string">&#x27;加载地图引擎...&#x27;</span><br>  <span class="hljs-keyword">const</span> maplibre = <span class="hljs-keyword">await</span> <span class="hljs-title function_">loadMapLibre</span>()        <span class="hljs-comment">// ← 关键路径上的唯一大件</span><br>  <span class="hljs-keyword">await</span> <span class="hljs-title function_">ensurePmtilesProtocol</span>(maplibre)       <span class="hljs-comment">// pmtiles 库同样是动态 import</span><br>  <span class="hljs-comment">// ...创建地图实例</span><br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><strong>配套的瓦片协议库也一样</strong>——PMTiles 的 Protocol 也是 <code>await import(&#39;pmtiles&#39;)</code> 按需加载，不用瓦片协议的用户路径不触发。</p>
+<p>这一组操作的净效果：首屏 HTML 之后的关键 JS 从「全量 bundle」变成「vue-vendor + 入口 + Home 页」，地图引擎在网络空闲期与地图初始化流程并行下载。用户感知到的顺序不再是「等引擎下载完才开始渲染页面」，而是「页面先出来，地图区域显示加载中，引擎到了地图补位」。</p>
+<h3 id="4-面板组件：defineAsyncComponent-按需挂载"><a href="#4-面板组件：defineAsyncComponent-按需挂载" class="headerlink" title="4. 面板组件：defineAsyncComponent 按需挂载"></a>4. 面板组件：defineAsyncComponent 按需挂载</h3><p>大屏首屏由地图容器 + 三个浮层面板（图层、事件、AI 助手）组成。面板不是首屏关键内容，全部异步：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-comment">// views/Home/index.vue</span><br><span class="hljs-comment">// 懒加载非首屏关键组件</span><br><span class="hljs-keyword">const</span> <span class="hljs-title class_">LayerPanel</span> = <span class="hljs-title function_">defineAsyncComponent</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-keyword">import</span>(<span class="hljs-string">&#x27;@/components/layout/LayerPanel.vue&#x27;</span>))<br><span class="hljs-keyword">const</span> <span class="hljs-title class_">EventPanel</span> = <span class="hljs-title function_">defineAsyncComponent</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-keyword">import</span>(<span class="hljs-string">&#x27;@/components/layout/EventPanel.vue&#x27;</span>))<br><span class="hljs-keyword">const</span> <span class="hljs-title class_">AIAssistant</span> = <span class="hljs-title function_">defineAsyncComponent</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-keyword">import</span>(<span class="hljs-string">&#x27;@/components/ai/AIAssistant.vue&#x27;</span>))<br></code></pre></td></tr></table></figure>
+
+<p>配合路由懒加载，这是两级异步：<strong>路由级</strong>（进首页才加载 Home）+ <strong>组件级</strong>（Home 渲染后才加载面板）。图层面板里还有整棵图层树的渲染逻辑和搜索过滤，拆出去后 Home 的首帧又轻了一截。</p>
+<h3 id="5-图标按需注册"><a href="#5-图标按需注册" class="headerlink" title="5. 图标按需注册"></a>5. 图标按需注册</h3><p>项目没有引 unplugin 自动按需，但图标走的是手动按需：从 <code>@element-plus/icons-vue</code> 具名导入需要的六十来个图标注册为全局组件，未引用的图标靠 tree shaking 摇掉：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">import</span> &#123; <span class="hljs-title class_">Monitor</span>, <span class="hljs-title class_">Camera</span>, <span class="hljs-title class_">FullScreen</span>, <span class="hljs-title class_">Plus</span>, <span class="hljs-comment">/* ... */</span> <span class="hljs-title class_">Grid</span>, <span class="hljs-title class_">List</span> &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;@element-plus/icons-vue&#x27;</span><br><br><span class="hljs-keyword">const</span> <span class="hljs-attr">icons</span>: <span class="hljs-title class_">Record</span>&lt;<span class="hljs-built_in">string</span>, <span class="hljs-built_in">any</span>&gt; = &#123; <span class="hljs-title class_">Monitor</span>, <span class="hljs-title class_">Camera</span>, <span class="hljs-title class_">FullScreen</span>, <span class="hljs-title class_">Plus</span>, <span class="hljs-comment">/* ... */</span> &#125;<br><span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> [name, component] <span class="hljs-keyword">of</span> <span class="hljs-title class_">Object</span>.<span class="hljs-title function_">entries</span>(icons)) &#123;<br>  app.<span class="hljs-title function_">component</span>(name, component)<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h2 id="二、抢网络：预连接与预取"><a href="#二、抢网络：预连接与预取" class="headerlink" title="二、抢网络：预连接与预取"></a>二、抢网络：预连接与预取</h2><h3 id="preconnect：给底图-CDN-提前握手"><a href="#preconnect：给底图-CDN-提前握手" class="headerlink" title="preconnect：给底图 CDN 提前握手"></a>preconnect：给底图 CDN 提前握手</h3><p>大屏底图样式 JSON 和矢量瓦片全部来自 <code>basemaps.cartocdn.com</code>，首屏必然访问。在 HTML 里提前完成 DNS + TCP + TLS：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-comment">&lt;!-- index.html --&gt;</span><br><span class="hljs-comment">&lt;!-- DNS 预解析 + 预连接，加速外部资源加载 --&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">link</span> <span class="hljs-attr">rel</span>=<span class="hljs-string">&quot;preconnect&quot;</span> <span class="hljs-attr">href</span>=<span class="hljs-string">&quot;https://basemaps.cartocdn.com&quot;</span> /&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">link</span> <span class="hljs-attr">rel</span>=<span class="hljs-string">&quot;dns-prefetch&quot;</span> <span class="hljs-attr">href</span>=<span class="hljs-string">&quot;https://basemaps.cartocdn.com&quot;</span> /&gt;</span><br></code></pre></td></tr></table></figure>
+
+<p>两行 HTML，省掉地图初始化时的握手串行等待。<code>dns-prefetch</code> 是 <code>preconnect</code> 的降级兜底，给老浏览器一份保险。选这个域名是有依据的——<strong>只 preconnect 首屏确定要访问的域</strong>，乱加反而挤占连接数。</p>
+<h3 id="预取底图样式-强缓存"><a href="#预取底图样式-强缓存" class="headerlink" title="预取底图样式 + 强缓存"></a>预取底图样式 + 强缓存</h3><p>切换底图要拉取新的 style JSON，这个项目在地图加载完成后顺手把<strong>所有底图的样式预取</strong>了一遍，且强制走 HTTP 缓存：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-comment">// stores/map.ts</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">preloadStyleJson</span>(<span class="hljs-params"><span class="hljs-attr">styleId</span>: <span class="hljs-built_in">string</span></span>): <span class="hljs-title class_">Promise</span>&lt;<span class="hljs-built_in">object</span> | <span class="hljs-literal">null</span>&gt; &#123;<br>  <span class="hljs-keyword">if</span> (_styleJsonCache.<span class="hljs-title function_">has</span>(styleId)) <span class="hljs-keyword">return</span> _styleJsonCache.<span class="hljs-title function_">get</span>(styleId)!   <span class="hljs-comment">// 内存缓存</span><br>  <span class="hljs-keyword">const</span> target = availableStyles.<span class="hljs-property">value</span>.<span class="hljs-title function_">find</span>(<span class="hljs-function"><span class="hljs-params">s</span> =&gt;</span> s.<span class="hljs-property">id</span> === styleId)<br>  <span class="hljs-keyword">if</span> (target.<span class="hljs-property">type</span> === <span class="hljs-string">&#x27;raster&#x27;</span>) &#123;<br>    <span class="hljs-keyword">const</span> rasterStyle = <span class="hljs-title function_">buildRasterStyle</span>(target)    <span class="hljs-comment">// 栅格底图本地构造，零请求</span><br>    _styleJsonCache.<span class="hljs-title function_">set</span>(styleId, rasterStyle)<br>    <span class="hljs-keyword">return</span> rasterStyle<br>  &#125;<br>  <span class="hljs-keyword">const</span> resp = <span class="hljs-keyword">await</span> <span class="hljs-title function_">fetch</span>(target.<span class="hljs-property">url</span>, &#123; <span class="hljs-attr">cache</span>: <span class="hljs-string">&#x27;force-cache&#x27;</span> &#125;)  <span class="hljs-comment">// 有缓存就不发请求</span><br>  <span class="hljs-keyword">const</span> json = <span class="hljs-keyword">await</span> resp.<span class="hljs-title function_">json</span>()<br>  _styleJsonCache.<span class="hljs-title function_">set</span>(styleId, json)<br>  <span class="hljs-keyword">return</span> json<br>&#125;<br><br><span class="hljs-comment">// 地图 style.load 之后，空闲期预取全部底图</span><br>mapStore.<span class="hljs-title function_">preloadAllStyles</span>()<br></code></pre></td></tr></table></figure>
+
+<p>三层缓存各司其职：内存 Map 管会话内复用，<code>force-cache</code> 管跨会话的 HTTP 缓存，栅格底图直接本地构造 JSON 连请求都不发。用户点切换底图时样式已是本地数据，切换零延迟。</p>
+<h2 id="三、首屏数据：并行、防重、缓存"><a href="#三、首屏数据：并行、防重、缓存" class="headerlink" title="三、首屏数据：并行、防重、缓存"></a>三、首屏数据：并行、防重、缓存</h2><p>理论篇强调「别让接口排队」。首页初始化要同时拿图层树、全局样式、叠放顺序三份数据，全部 <code>Promise.all</code> 并行：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-comment">// stores/layer.ts</span><br><span class="hljs-keyword">const</span> [treeRes, , globalOrderResult] = <span class="hljs-keyword">await</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">all</span>([<br>  <span class="hljs-title function_">getLayerTree</span>(),<br>  <span class="hljs-title function_">loadGlobalStyle</span>(),                        <span class="hljs-comment">// 内部还有 sessionStorage 缓存兜底</span><br>  <span class="hljs-title function_">getGlobalOrder</span>().<span class="hljs-title function_">catch</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-literal">null</span>),       <span class="hljs-comment">// 弱依赖：失败不阻塞主流程</span><br>])<br></code></pre></td></tr></table></figure>
+
+<p>两个额外细节：</p>
+<ul>
+<li><strong>弱依赖降级</strong>：<code>getGlobalOrder().catch(() =&gt; null)</code>——排序接口挂了不该拖死整个图层树加载，拿到 null 就用默认排序；</li>
+<li><strong>单例防重</strong>：首页和图层面板的 <code>onMounted</code> 都会触发初始化，用 Promise 缓存挡住第二次请求：</li>
+</ul>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">let</span> <span class="hljs-attr">_homeInitPromise</span>: <span class="hljs-title class_">Promise</span>&lt;<span class="hljs-built_in">void</span>&gt; | <span class="hljs-literal">null</span> = <span class="hljs-literal">null</span><br><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">initHomeLayerData</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-keyword">if</span> (_homeInitPromise) <span class="hljs-keyword">return</span> _homeInitPromise   <span class="hljs-comment">// 已经在跑，直接复用</span><br>  _homeInitPromise = (<span class="hljs-title function_">async</span> () =&gt; &#123;<br>    <span class="hljs-keyword">await</span> <span class="hljs-title function_">loadLayers</span>()<br>    <span class="hljs-keyword">await</span> <span class="hljs-title function_">loadGraphLayers</span>()<br>  &#125;)()<br>  <span class="hljs-keyword">return</span> _homeInitPromise<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>全局样式还会写进 sessionStorage——刷新页面时跳过 <code>getGlobalStyle</code> 请求，直接从会话缓存构建样式缓存。首屏接口从 3 个降到 2 个。</p>
+<h2 id="四、白屏期：分阶段进度反馈"><a href="#四、白屏期：分阶段进度反馈" class="headerlink" title="四、白屏期：分阶段进度反馈"></a>四、白屏期：分阶段进度反馈</h2><p>项目没有做 index.html 级的骨架屏，但在<strong>地图容器内部</strong>做了分阶段的加载反馈——地图区域不是干等，而是持续告诉用户「现在进行到哪了」：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">const</span> loadingProgress = <span class="hljs-title function_">ref</span>(<span class="hljs-number">0</span>)<br><span class="hljs-keyword">const</span> loadingStage = <span class="hljs-title function_">ref</span>(<span class="hljs-string">&#x27;正在初始化地图引擎...&#x27;</span>)<br><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">startLoadingProgress</span>(<span class="hljs-params"></span>) &#123;<br>  loadingProgress.<span class="hljs-property">value</span> = <span class="hljs-number">5</span><br>  loadingStage.<span class="hljs-property">value</span> = <span class="hljs-string">&#x27;加载地图样式...&#x27;</span><br>  <span class="hljs-keyword">return</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">advanceProgress</span>(<span class="hljs-params"><span class="hljs-attr">percent</span>: <span class="hljs-built_in">number</span>, <span class="hljs-attr">stage</span>?: <span class="hljs-built_in">string</span></span>) &#123;<br>    loadingProgress.<span class="hljs-property">value</span> = <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">min</span>(percent, <span class="hljs-number">99</span>)   <span class="hljs-comment">// 封顶 99，完成交给真实事件</span><br>    <span class="hljs-keyword">if</span> (stage) loadingStage.<span class="hljs-property">value</span> = stage<br>  &#125;<br>&#125;<br><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">initMap</span>(<span class="hljs-params"></span>) &#123;<br>  loadingStage.<span class="hljs-property">value</span> = <span class="hljs-string">&#x27;加载地图引擎...&#x27;</span><br>  <span class="hljs-keyword">const</span> maplibre = <span class="hljs-keyword">await</span> <span class="hljs-title function_">loadMapLibre</span>()<br>  <span class="hljs-keyword">const</span> advanceProgress = <span class="hljs-title function_">startLoadingProgress</span>()<br>  <span class="hljs-comment">// ... 底图加载中按节点推进：advanceProgress(40, &#x27;加载底图瓦片...&#x27;)</span><br>  <span class="hljs-comment">// style.load 后：loadingStage.value = &#x27;底图加载完成&#x27;</span><br>&#125;<br></code></pre></td></tr></table></figure>
+
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">&quot;loading-stage&quot;</span>&gt;</span>&#123;&#123; loadingStage &#125;&#125;<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><span class="hljs-comment">&lt;!-- 进度条按 loadingProgress 渲染 --&gt;</span><br></code></pre></td></tr></table></figure>
+
+<p>一个小而讲究的设计：进度<strong>封顶 99%</strong>——异步加载的真实耗时不可预测，进度条冲到 100 却还卡在那儿，比停在 99 更让人焦虑。100% 只能由「地图真正加载完成」这个事件来置位。这是「体感优化」里典型的心理学小把戏，和骨架屏同一族：时间没变，等待变得可解释了。</p>
+<p>另外详情弹窗里的图片用了原生懒加载，一行声明式：<img :src="img" loading="lazy" />，非首屏图片不占首屏带宽。</p>
+<h2 id="五、诚实的账：理论有、项目还没做的"><a href="#五、诚实的账：理论有、项目还没做的" class="headerlink" title="五、诚实的账：理论有、项目还没做的"></a>五、诚实的账：理论有、项目还没做的</h2><ul>
+<li><strong>web-vitals 上报</strong>：没有。目前优化验收靠 Lighthouse 手跑，缺真实用户数据——LCP 在客户内网环境是什么水平，其实是笔糊涂账。这在监控篇补课；</li>
+<li><strong>Element Plus 组件按需引入</strong>：<code>app.use(ElementPlus)</code> 是全量引入，全量 CSS 也进了首屏。manualChunks 把它隔离成了独立 chunk（不阻塞关键路径的并行下载），但<strong>总量没减</strong>。按 unplugin-vue-components 按需引入预计还能再砍掉一大块，属于已识别未执行；</li>
+<li><strong>服务端 gzip&#x2F;brotli、CDN、缓存头</strong>：前端仓库之外，需要部署侧配合，代码里无从体现；</li>
+<li><strong>index.html 骨架屏 &#x2F; 内联关键 CSS &#x2F; SSR</strong>：未做。大屏场景白屏期被「地图加载进度」组件覆盖了大半，且内网部署暂无 SEO 需求，优先级排后——先吃便宜的收益，贵的刀最后动。</li>
+</ul>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>这张大屏的首屏优化，本质是把理论清单按项目特点<strong>排了优先级</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>手段</th>
+<th>代码位置</th>
+<th>对首屏的意义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>路由全懒加载</td>
+<td><code>router/index.ts</code></td>
+<td>管理页零字节进首屏</td>
+</tr>
+<tr>
+<td>manualChunks 五路分包</td>
+<td><code>vite.config.ts</code></td>
+<td>长缓存物理基础 + 公共依赖不重复打包</td>
+</tr>
+<tr>
+<td>地图引擎三件动态 import</td>
+<td><code>main.ts</code> &#x2F; <code>MapContainer.vue</code></td>
+<td>数百 KB 最大件移出关键路径</td>
+</tr>
+<tr>
+<td>defineAsyncComponent 面板</td>
+<td><code>views/Home/index.vue</code></td>
+<td>首帧只渲染地图容器</td>
+</tr>
+<tr>
+<td>preconnect 底图 CDN</td>
+<td><code>index.html</code></td>
+<td>握手与 JS 下载并行</td>
+</tr>
+<tr>
+<td>样式预取 + force-cache</td>
+<td><code>stores/map.ts</code></td>
+<td>切底图零网络等待</td>
+</tr>
+<tr>
+<td>Promise.all + 单例防重</td>
+<td><code>stores/layer.ts</code></td>
+<td>接口不排队、不重复</td>
+</tr>
+<tr>
+<td>分阶段加载进度</td>
+<td><code>MapContainer.vue</code></td>
+<td>白屏期可解释</td>
+</tr>
+</tbody></table>
+<p><strong>一句话记住</strong>：首屏优化落地时别平均用力——先找出项目里<strong>最大的那块依赖</strong>（这里是地图引擎），把它异步化；再用分包和缓存把「不变的」和「常变的」分开；最后让等待变得可解释。理论清单是地图，往哪走要看自己项目的地形。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io">StellaCode98</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io/2026/09/10/spa-first-screen-practice/">https://stellacode98.github.io/2026/09/10/spa-first-screen-practice/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://stellacode98.github.io" target="_blank">眉眼如初、</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/vue3/">vue3</a><a class="post-meta__tags" href="/tags/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/">性能优化</a><a class="post-meta__tags" href="/tags/SPA/">SPA</a><a class="post-meta__tags" href="/tags/%E9%A6%96%E5%B1%8F/">首屏</a><a class="post-meta__tags" href="/tags/vite/">vite</a></div><div class="post-share"><div class="social-share" data-image="/img/avatar.jpg" data-sites="wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2026/09/10/webpack-vs-rollup/" title="Webpack 与 Rollup：一个为应用而生，一个为库而生"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">Webpack 与 Rollup：一个为应用而生，一个为库而生</div></div><div class="info-2"><div class="info-item-1">这两个工具经常被放在一起比，但它们出生时回答的是两个不同的问题：  Webpack（2012）：怎么把一个「应用」跑进浏览器？ 于是万物皆模块（JS&#x2F;CSS&#x2F;图片&#x2F;字体），loader 负责转换，dev-server + HMR 负责开发体验，产物自带运行时。Rollup（2015）：怎么把一个「库」发布得干净？ 于是原生 ESM 静态分析，产物几乎没有运行时，多格式输出（ESM&#x2F;CJS&#x2F;UMD），下游打包器还能继续 tree shaking。  选型口诀可以先记住：写应用用 Webpack，发库用 Rollup。下面解释为什么。 12Webpack 产物 = 运行时(__webpack_require__) + 模块注册表(每个模块包一层函数)Rollup 产物 = 所有模块摊平进同一个作用域，看起来像一份手写的代码    一、出身决定性格Webpack 诞生于 CommonJS 时代，核心洞见是「任何资源都是模块」+「动态依赖可以切分出按需加载的代码块」。它的战场是应用开发：入口一堆、资源一堆、要热更新、要按路由分包。 Rol...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/09/10/spa-first-screen-optimization/" title="SPA 首屏优化：减体积、抢网络、缩白屏"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-10</div><div class="info-item-2">SPA 首屏优化：减体积、抢网络、缩白屏</div></div><div class="info-2"><div class="info-item-1">SPA 首屏慢的根源是结构性的：HTML 里只有一个空的 &lt;div id=&quot;app&quot;&gt;，一切内容都要等 JS 下载、解析、执行完才能出现。所以优化逃不出三个方向：  减体积——让首屏只下载首屏需要的代码；抢网络——让必须传的字节更快到达；缩白屏——让 JS 接管之前，用户就有东西可看。  先把时间线摆出来，慢在哪一段，就用哪一段的手段： 1234导航开始 ─► TTFB ─► HTML 到达 ─► JS/CSS 下载 ─► 解析执行 ─► 首屏渲染 ─► 首屏接口返回 ─► 内容完整             │                    │               │            │              │          服务端慢？           体积/网络？        长任务？      接口串行？          (后端/SSR)          (减体积/抢网络)    (拆任务)     (并行/预取)    一、先量化，再优化不测量就优化，等于蒙眼开药。三个核心指标：  FCP（First...</div></div></div></a><a class="pagination-related" href="/2026/09/09/vue-diff-and-key/" title="虚拟 DOM diff 算法与 key 的正确用法"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">虚拟 DOM diff 算法与 key 的正确用法</div></div><div class="info-2"><div class="info-item-1">虚拟 DOM diff 算法与 key 的正确用法使用 Vue 或 React 时，几乎每个人都写过这样的代码： 123&lt;li v-for=&quot;item in list&quot; :key=&quot;item.id&quot;&gt;  &#123;&#123; item.name &#125;&#125;&lt;/li&gt;  也几乎每个人都被编辑器警告过：  Elements in iteration expect to have ‘v-bind:key’ directives.  于是 key 变成了一种”加上就不报错”的咒语。 但如果追问几个问题，很多人就答不上来了：  key 到底参与了什么过程？ 为什么不能用 index 当 key？ 为什么用 Math.random() 当 key 反而更糟？  这些问题全部指向同一个东西： 1diff 算法  本文从虚拟 DOM 的更新流程开始，先理解 diff 为什么存在、它做了哪些简化，再看 Vue2 的双端比较和 Vue3 的最长递增子序列，最后回到 key 的正确用法。  一、diff 算法解决了什么问...</div></div></div></a><a class="pagination-related" href="/2026/09/09/webpack-performance/" title="Webpack 性能优化速查：构建速度与产物体积，一张表讲完"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">Webpack 性能优化速查：构建速度与产物体积，一张表讲完</div></div><div class="info-2"><div class="info-item-1">Webpack 的优化手段几十条，但目标只有两个： 12构建速度  → 优化的是开发体验（等多久能跑起来）产物体积  → 优化的是用户首屏（下载多少 JS 才能看）  本文不铺原理，每条只留结论 + 最小配置，按「收益 &#x2F; 成本」排序。以 webpack5 为准，webpack4 的差异随文标注。  0. 先测量，再优化没有数据的一切优化都是猜。两件工具先装上： 12345// 体积构成：谁把包撑大的const &#123; BundleAnalyzerPlugin &#125; = require(&#x27;webpack-bundle-analyzer&#x27;)// 各阶段耗时：时间花在哪了const SpeedMeasurePlugin = require(&#x27;speed-measure-webpack-plugin&#x27;)  90% 的项目分析完会发现：体积大头是 node_modules 里的重复依赖和没被 tree shaking 掉的组件库；耗时大头是 babel 对 node_modules 的无谓转译。下面的手段就是逐个干掉它们。 ...</div></div></div></a><a class="pagination-related" href="/2026/09/09/miniprogram-performance/" title="小程序性能优化实战清单：分包、骨架屏、长列表"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">小程序性能优化实战清单：分包、骨架屏、长列表</div></div><div class="info-2"><div class="info-item-1">小程序的性能问题，拆开就是一条启动链路上的三个阶段： 123下载代码包 → 注入 → 首屏渲染 → 运行时交互     ↑           ↑         ↑           ↑   分包         分包      骨架屏      长列表 / setData  三板斧各治一段：分包治下载、骨架屏治感知、长列表治运行时。本文以微信小程序为例，每条给结论和能直接抄的代码。动手前先跑一遍开发者工具的「体验评分」面板，让数据告诉你卡在哪一段。  一、分包：主包只留”进门必须的”1.1 为什么要分包小程序先下载主包、再渲染首页，主包越大，用户看到的第一个像素越晚。硬性限制： 1单个分包 / 主包 ≤ 2M        整个小程序（所有分包合计）≤ 30M  主包超 2M 直接没法上传，所以分包不是可选项，是必修课。 1.2 基础配置：app.json1234567891011121314151617181920212223&#123;  &quot;pages&quot;: [    &quot;pages/index/index&quot;,    &quot;pa...</div></div></div></a><a class="pagination-related" href="/2026/09/10/javascript-debounce-throttle/" title="手写防抖与节流：30 行核心代码，讲清两件事"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-10</div><div class="info-item-2">手写防抖与节流：30 行核心代码，讲清两件事</div></div><div class="info-2"><div class="info-item-1">scroll、resize、input、mousemove 这类事件一秒能触发几十上百次，处理器跟不上就是卡顿。防抖和节流做的事情一样——降频，但策略相反：  防抖（debounce）：等你停了我再做。 每次触发都重新计时，只有安静了 wait 毫秒才执行，持续触发期间一次都不跑。节流（throttle）：再急也按固定节奏做。 不管触发多频繁，每个 wait 窗口内最多执行一次。  电梯类比：防抖是「有人进来就重新等，没人再进才关门」；节流是「观光车每 10 分钟发一班，到点就走」。   一、手写防抖基础版核心就一招：用闭包存住定时器，每次触发先把上一个清掉。 123456789101112function debounce(fn, wait) &#123;  let timer = null;  return function (...args) &#123;    if (timer) clearTimeout(timer);   // 上一次作废，重新计时    timer = setTimeout(() =&gt; &#123;      fn.apply(this, a...</div></div></div></a><a class="pagination-related" href="/2026/09/09/maplibre-layer-management/" title="大屏地图的图层管理实战：MapLibre GL 动态样式、两阶段渲染与叠放排序"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">大屏地图的图层管理实战：MapLibre GL 动态样式、两阶段渲染与叠放排序</div></div><div class="info-2"><div class="info-item-1">最近在一个数据可视化大屏项目里负责地图模块，需求乍看很朴素：左侧一棵图层树，勾选哪类设施，地图上就渲染哪类要素。但做下去发现坑一个接一个：  设施有几十类，点、线、面混杂，样式（颜色&#x2F;图标&#x2F;线宽）全部由后端配置下发，前端写死不可能； 矢量瓦片是异步加载的，「瓦片里到底有哪些要素类型」要等加载完才知道——直接等它，图层会白屏好几百毫秒； 大面积面要素挂图标，放大后每个瓦片上都长出一个重复图标； 一切换底图样式，所有业务图层集体消失（MapLibre 的 setStyle 会重置整个样式）； 把 MapLibre 实例塞进 Vue 的 ref，地图随机报错，内部数据结构被 Proxy 拆得面目全非。  这篇文章把这些问题的解法按主题拆开讲清楚。技术栈是 Vue 3 + Pinia + MapLibre GL（配 PMTiles 协议），但思路对任何 WebGL 地图引擎（Mapbox GL &#x2F; MapLibre &#x2F; 高性能 Canvas 地图）都通用。   一、整体架构：不写图层基类，用组合式工厂先回答一个设计问题：几十种图层，要不要抽象一个 ...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">StellaCode98</div><div class="author-info-description">记录前端学习与开发中的思考</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">21</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">77</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">16</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/kxl-823"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/kxl-823" target="_blank" title="GitHub"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">欢迎来到我的小站，这里记录我的学习笔记与实践心得</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E5%87%8F%E4%BD%93%E7%A7%AF%EF%BC%9A%E4%B8%89%E5%B1%82%E5%BC%82%E6%AD%A5%E5%8C%96"><span class="toc-number">1.</span> <span class="toc-text">一、减体积：三层异步化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E8%B7%AF%E7%94%B1%E6%87%92%E5%8A%A0%E8%BD%BD%EF%BC%9A%E8%BF%9E%E5%B8%83%E5%B1%80%E9%83%BD%E4%B8%8D%E6%94%BE%E8%BF%9B%E9%A6%96%E5%B1%8F"><span class="toc-number">1.1.</span> <span class="toc-text">1. 路由懒加载：连布局都不放进首屏</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E4%BE%9D%E8%B5%96%E5%88%86%E5%8C%85%EF%BC%9A%E4%BA%94%E8%B7%AF-manualChunks-contenthash"><span class="toc-number">1.2.</span> <span class="toc-text">2. 依赖分包：五路 manualChunks + contenthash</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%9C%B0%E5%9B%BE%E5%BC%95%E6%93%8E%E5%BC%82%E6%AD%A5%E5%8A%A0%E8%BD%BD%EF%BC%9A%E6%9C%AC%E9%A1%B9%E7%9B%AE%E6%9C%80%E5%80%BC%E9%92%B1%E7%9A%84%E4%B8%80%E5%88%80"><span class="toc-number">1.3.</span> <span class="toc-text">3. 地图引擎异步加载：本项目最值钱的一刀</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E9%9D%A2%E6%9D%BF%E7%BB%84%E4%BB%B6%EF%BC%9AdefineAsyncComponent-%E6%8C%89%E9%9C%80%E6%8C%82%E8%BD%BD"><span class="toc-number">1.4.</span> <span class="toc-text">4. 面板组件：defineAsyncComponent 按需挂载</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-%E5%9B%BE%E6%A0%87%E6%8C%89%E9%9C%80%E6%B3%A8%E5%86%8C"><span class="toc-number">1.5.</span> <span class="toc-text">5. 图标按需注册</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E6%8A%A2%E7%BD%91%E7%BB%9C%EF%BC%9A%E9%A2%84%E8%BF%9E%E6%8E%A5%E4%B8%8E%E9%A2%84%E5%8F%96"><span class="toc-number">2.</span> <span class="toc-text">二、抢网络：预连接与预取</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#preconnect%EF%BC%9A%E7%BB%99%E5%BA%95%E5%9B%BE-CDN-%E6%8F%90%E5%89%8D%E6%8F%A1%E6%89%8B"><span class="toc-number">2.1.</span> <span class="toc-text">preconnect：给底图 CDN 提前握手</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%A2%84%E5%8F%96%E5%BA%95%E5%9B%BE%E6%A0%B7%E5%BC%8F-%E5%BC%BA%E7%BC%93%E5%AD%98"><span class="toc-number">2.2.</span> <span class="toc-text">预取底图样式 + 强缓存</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E9%A6%96%E5%B1%8F%E6%95%B0%E6%8D%AE%EF%BC%9A%E5%B9%B6%E8%A1%8C%E3%80%81%E9%98%B2%E9%87%8D%E3%80%81%E7%BC%93%E5%AD%98"><span class="toc-number">3.</span> <span class="toc-text">三、首屏数据：并行、防重、缓存</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E7%99%BD%E5%B1%8F%E6%9C%9F%EF%BC%9A%E5%88%86%E9%98%B6%E6%AE%B5%E8%BF%9B%E5%BA%A6%E5%8F%8D%E9%A6%88"><span class="toc-number">4.</span> <span class="toc-text">四、白屏期：分阶段进度反馈</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E8%AF%9A%E5%AE%9E%E7%9A%84%E8%B4%A6%EF%BC%9A%E7%90%86%E8%AE%BA%E6%9C%89%E3%80%81%E9%A1%B9%E7%9B%AE%E8%BF%98%E6%B2%A1%E5%81%9A%E7%9A%84"><span class="toc-number">5.</span> <span class="toc-text">五、诚实的账：理论有、项目还没做的</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">6.</span> <span class="toc-text">总结</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/spa-first-screen-practice/" title="SPA 首屏优化落地实录：大屏项目的路由分割、依赖分包与异步引擎加载">SPA 首屏优化落地实录：大屏项目的路由分割、依赖分包与异步引擎加载</a><time datetime="2026-09-10T07:00:00.000Z" title="发表于 2026-09-10 15:00:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/webpack-vs-rollup/" title="Webpack 与 Rollup：一个为应用而生，一个为库而生">Webpack 与 Rollup：一个为应用而生，一个为库而生</a><time datetime="2026-09-10T06:00:00.000Z" title="发表于 2026-09-10 14:00:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/spa-first-screen-optimization/" title="SPA 首屏优化：减体积、抢网络、缩白屏">SPA 首屏优化：减体积、抢网络、缩白屏</a><time datetime="2026-09-10T03:00:00.000Z" title="发表于 2026-09-10 11:00:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/network-tcp-http-websocket-sse/" title="TCP、HTTP、WebSocket 与 SSE：一根管道上的四种用法">TCP、HTTP、WebSocket 与 SSE：一根管道上的四种用法</a><time datetime="2026-09-10T02:46:00.000Z" title="发表于 2026-09-10 10:46:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/javascript-debounce-throttle/" title="手写防抖与节流：30 行核心代码，讲清两件事">手写防抖与节流：30 行核心代码，讲清两件事</a><time datetime="2026-09-10T02:00:00.000Z" title="发表于 2026-09-10 10:00:00">2026-09-10</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By StellaCode98</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.2</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.7.0</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><div class="js-pjax"></div><video id="site-video" src="/video/gufeng-snow.mp4" poster="/img/gufeng-girl.webp" autoplay loop muted playsinline disablepictureinpicture></video><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></div></body></html>

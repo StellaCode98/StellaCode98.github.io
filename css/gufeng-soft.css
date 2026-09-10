@@ -1,0 +1,20 @@
+/* 古风柔和配色：替换主题默认的“纯黑卡片 + 亮蓝页脚”，与雪景/古风背景呼应 */
+
+/* 上一篇/下一篇、相关推荐卡片：黛蓝半透明 + 毛玻璃，透出背景雪景
+   覆盖点1：卡片底色由 $dark-black 纯黑改为黛蓝 rgba(74,100,124,.9)
+   覆盖点2：无封面卡片内部 .cover 引用 --default-bg-color（主题亮蓝），
+            这里将该变量局部置为透明，避免再叠出一层蓝 */
+#pagination .pagination-related,
+.relatedPosts .relatedPosts-list > a {
+  --default-bg-color: transparent;
+  background-color: rgba(74, 100, 124, .9);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+/* 页脚：烟青半透明 + 毛玻璃，替代主题色 #49b1f5 亮蓝 */
+#footer {
+  background: rgba(93, 120, 145, .8);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
