@@ -5,7 +5,6 @@ description: 四个协议分处两层：TCP 是传输层的可靠字节流，本
 categories:
   - [前端基础, 网络]
 tags:
-  - 网络
   - TCP
   - HTTP
   - WebSocket

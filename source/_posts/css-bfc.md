@@ -6,9 +6,6 @@ categories:
   - [前端基础, css]
 tags:
   - CSS
-  - 层叠上下文
-  - BFC
-  - z-index
   - 前端基础
 ---
 

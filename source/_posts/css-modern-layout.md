@@ -6,9 +6,6 @@ categories:
   - [前端基础, css]
 tags:
   - css
-  - flex
-  - grid
-  - 容器查询
 ---
 
 刚写页面那几年，我的布局知识就两样：float + position。后来 Flexbox 出了，就开始「flex 一把梭」——导航用它，列表用它，页面骨架也用它。真正逼我去补课的是三个场景：

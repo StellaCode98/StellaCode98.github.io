@@ -7,7 +7,6 @@ categories:
 tags:
   - html
   - 语义化
-  - 无障碍
   - SEO
   - 前端基础
 ---

@@ -7,7 +7,6 @@ categories:
 tags:
   - 性能优化
   - SPA
-  - 首屏
   - vite
   - vue3
 ---

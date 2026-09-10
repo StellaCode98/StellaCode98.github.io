@@ -6,9 +6,7 @@ categories:
   - [Vue 进阶]
 tags:
   - Vue3
-  - 权限
   - RBAC
-  - 自定义指令
   - Pinia
   - axios
 ---

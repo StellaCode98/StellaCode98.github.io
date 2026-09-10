@@ -8,8 +8,6 @@ tags:
   - Webpack
   - 性能优化
   - Tree Shaking
-  - 代码分割
-  - 构建优化
 ---
 
 Webpack 的优化手段几十条，但目标只有两个：

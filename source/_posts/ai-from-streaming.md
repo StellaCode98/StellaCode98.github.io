@@ -2,9 +2,9 @@
 layout: post
 title: "前端工程师的 AI 入门：从流式接口到落地一个 AI 应用"
 date: 2026-09-09 11:00:00 
-tags: [AI, SSE, Function Calling, Vue3, Node.js, LLM]
-categories: [AI 应用开发]
 description: "以一个真实落地的 AI 聊天模块为例，讲透前端视角下的两大核心：SSE 流式对话与 Function Calling 工具调用——从协议、代码到工程化的所有坑。"
+categories: [AI 应用开发]
+tags: [AI, SSE, Function Calling, Vue3, Node.js, LLM]
 ---
 
 > 这篇文章不是概念科普，而是一次真实的落地复盘。最近我在自己的 Vue3 后台管理项目（vue3_admin）里完整实现了一个 AI 智能问答模块：支持 SSE 流式打字机输出、多轮对话记忆、Function Calling 工具调用、可视化组件渲染、会话持久化。本文把这条链路从头到尾拆开讲——**为什么需要流式、前端怎么手写 SSE 解析器、Function Calling 的两轮循环到底转了什么、以及从 demo 到可用应用之间隔着哪些工程细节**。所有代码都来自这个真实模块，文末附完整文件地图。

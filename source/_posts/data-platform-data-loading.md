@@ -6,10 +6,8 @@ categories:
   - 前端工程化
 tags:
   - axios
-  - mock
   - websocket
   - sse
-  - 数据加载
   - 前端工程化
 ---
 

@@ -7,7 +7,6 @@ categories:
 tags:
   - javascript
   - 事件循环
-  - 异步
   - node.js
 ---
 

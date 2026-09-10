@@ -7,7 +7,7 @@
 - `source`：博客源码（笔记、配置、主题），日常在这里写作
 - `main`：`hexo deploy` 自动推送的构建产物，勿手动修改
 
-## 新电脑初始化
+## 初始化
 
 前置：安装 Git、Node.js（20+ LTS，本仓库开发环境为 v22）。
 
@@ -40,4 +40,4 @@ npx hexo clean && npx hexo g -d           # 生成并部署到 main，线上生�
 git add . && git commit -m "新笔记" && git push origin source  # 源码同步
 ```
 
-换电脑开工前先 `git pull origin source` 拉最新笔记。
+<!-- 换电脑开工前先 `git pull origin source` 拉最新笔记。 -->
