@@ -1,0 +1,435 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store | 眉眼如初、</title><meta name="author" content="StellaCode98"><meta name="copyright" content="StellaCode98"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="一篇文章讲透 Vue 两个官方状态管理库：Vuex 的单向数据流与 mutations 存在的理由、它的五个痛点，Pinia 如何用组合式 API 逐个拆掉这些包袱；含 Option&#x2F;Setup 双写法对照、$patch&#x2F;$subscribe&#x2F;$onAction 与插件机制原理、storeToRefs 解构响应性、组件外使用 store、Vuex → Pinia 迁移映射表与高频面试题。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store">
+<meta property="og:url" content="https://stellacode98.github.io/2026/09/10/pinia-vs-vuex/index.html">
+<meta property="og:site_name" content="眉眼如初、">
+<meta property="og:description" content="一篇文章讲透 Vue 两个官方状态管理库：Vuex 的单向数据流与 mutations 存在的理由、它的五个痛点，Pinia 如何用组合式 API 逐个拆掉这些包袱；含 Option&#x2F;Setup 双写法对照、$patch&#x2F;$subscribe&#x2F;$onAction 与插件机制原理、storeToRefs 解构响应性、组件外使用 store、Vuex → Pinia 迁移映射表与高频面试题。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://stellacode98.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-09-10T13:30:00.000Z">
+<meta property="article:modified_time" content="2026-09-10T04:58:10.136Z">
+<meta property="article:author" content="StellaCode98">
+<meta property="article:tag" content="Pinia">
+<meta property="article:tag" content="Vue2">
+<meta property="article:tag" content="Vue3">
+<meta property="article:tag" content="Vuex">
+<meta property="article:tag" content="状态管理">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://stellacode98.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store",
+  "url": "https://stellacode98.github.io/2026/09/10/pinia-vs-vuex/",
+  "image": "https://stellacode98.github.io/img/avatar.jpg",
+  "datePublished": "2026-09-10T13:30:00.000Z",
+  "dateModified": "2026-09-10T04:58:10.136Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "StellaCode98",
+      "url": "https://stellacode98.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.ico"><link rel="canonical" href="https://stellacode98.github.io/2026/09/10/pinia-vs-vuex/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/bg-video.css"><link rel="stylesheet" href="/css/gufeng-soft.css"><meta name="generator" content="Hexo 8.1.2"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">27</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">75</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">24</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/gufeng-girl.webp);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">眉眼如初、</span></a><a class="nav-page-title" href="/"><span class="site-name">Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-10T13:30:00.000Z" title="发表于 2026-09-10 21:30:00">2026-09-10</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-10T04:58:10.136Z" title="更新于 2026-09-10 12:58:10">2026-09-10</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/Vue/">Vue</a><i class="fas fa-angle-right post-meta-separator"></i><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/Vue/%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86/">状态管理</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p>这两个库解决的问题只有一个：<strong>多个组件共享同一份状态</strong>。但它们给出的答案，恰好对应了 Vue2 和 Vue3 两代技术栈的世界观——Vuex 是「中心化的单一仓库 + 单向数据流」，Pinia 是「一组全局的组合式函数」。</p>
+<blockquote>
+<p><strong>先说结论</strong>：Vuex 强制把「改状态」拆成 mutations（同步）和 actions（异步），是为了在 Options API 时代让 DevTools 能可靠追踪每一次变更；Vue3 的响应式系统本身就能观测到任何途径的修改，这层强制拆分失去了意义，于是 Pinia 把它删掉了，同时用「天然按 id 拆分的扁平 store」取代了 Vuex 的嵌套 modules。新项目（Vue3）直接用 Pinia，没有第二个选项；Vue2 老项目继续 Vuex，不必强行迁移。</p>
+</blockquote>
+<span id="more"></span>
+
+<h2 id="一、为什么需要状态管理"><a href="#一、为什么需要状态管理" class="headerlink" title="一、为什么需要状态管理"></a>一、为什么需要状态管理</h2><p>组件化把页面拆成了树，但状态经常不属于任何一棵子树——登录态、用户信息、购物车、主题配置，都是「很多组件都要读写」的东西。不借助任何方案时，只有两条路：</p>
+<p><strong>1. props 逐层透传（props drilling）</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs vue">&lt;!-- App.vue 知道 user，但真正用它的是 5 层之下的 Avatar.vue --&gt;<br>&lt;App :user=&quot;user&quot; /&gt;<br>  └─ &lt;Layout :user=&quot;user&quot; /&gt;<br>       └─ &lt;Sidebar :user=&quot;user&quot; /&gt;<br>            └─ &lt;Panel :user=&quot;user&quot; /&gt;<br>                 └─ &lt;Avatar :user=&quot;user&quot; /&gt;  &lt;!-- 中间三层只是搬运工 --&gt;<br></code></pre></td></tr></table></figure>
+
+<p>中间组件被迫声明与自己无关的 props，数据流变成了体力劳动；而且兄弟组件之间这条路根本不通，得先把事件冒泡到公共祖先再传下来。</p>
+<p><strong>2. 全局事件或全局变量</strong></p>
+<p>挂 <code>window</code>、用 EventBus 面包屑式通知，状态散落在各处，没有统一的「单一数据源」（Single Source of Truth），排查问题时不知道值是谁改的。</p>
+<p>状态管理库做的事因此很朴素：<strong>把共享状态提到组件树外的一个全局仓库里，任何组件都能直接读写，同时保留响应式和可追踪性</strong>。</p>
+<p>但也要警惕反面：不是所有状态都该进全局仓库。表单草稿、弹窗开关、输入框焦点这类<strong>真正的局部状态</strong>，用 <code>ref</code>&#x2F;<code>reactive</code> 留在组件内就好；只是嫌透传麻烦的话，<code>provide/inject</code> 或一个模块级 <code>ref</code>（见 7.5）可能比引一个库更合适。<strong>先有共享需求，再上状态管理。</strong></p>
+<h2 id="二、Vuex：中心化仓库与单向数据流"><a href="#二、Vuex：中心化仓库与单向数据流" class="headerlink" title="二、Vuex：中心化仓库与单向数据流"></a>二、Vuex：中心化仓库与单向数据流</h2><h3 id="2-1-心智模型"><a href="#2-1-心智模型" class="headerlink" title="2.1 心智模型"></a>2.1 心智模型</h3><p>Vuex 的核心是一张经典图：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs text">components ──dispatch──&gt; actions（可异步）──commit──&gt; mutations（必须同步）──&gt; state<br>    │                                                        │<br>    └──────────────── commit（直接同步改）───────────────────┘<br>                                 │<br>                          getters ──派生──&gt; components<br></code></pre></td></tr></table></figure>
+
+<p>规则很明确：</p>
+<ul>
+<li><strong>state</strong>：唯一数据源，挂在 <code>store.state</code> 上；</li>
+<li><strong>getters</strong>：state 的计算属性（缓存）；</li>
+<li><strong>mutations</strong>：<strong>唯一合法的修改入口</strong>，必须是同步函数，第一个参数是 state；</li>
+<li><strong>actions</strong>：提交 mutation，可以异步（发请求、定时器），第一个参数是上下文对象；</li>
+<li>组件里 <code>commit(&#39;xxx&#39;)</code> 改状态，<code>dispatch(&#39;xxx&#39;)</code> 触发异步流程。</li>
+</ul>
+<h3 id="2-2-完整示例"><a href="#2-2-完整示例" class="headerlink" title="2.2 完整示例"></a>2.2 完整示例</h3><figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-comment">// store/index.js</span><br><span class="hljs-keyword">import</span> &#123; createStore &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vuex&#x27;</span><br><br><span class="hljs-keyword">const</span> userModule = &#123;<br>  <span class="hljs-attr">namespaced</span>: <span class="hljs-literal">true</span>, <span class="hljs-comment">// 关键：开启命名空间，否则所有模块的 mutations/getters 都注册在全局</span><br>  <span class="hljs-attr">state</span>: <span class="hljs-function">() =&gt;</span> (&#123;<br>    <span class="hljs-attr">token</span>: <span class="hljs-string">&#x27;&#x27;</span>,<br>    <span class="hljs-attr">userInfo</span>: <span class="hljs-literal">null</span>,<br>  &#125;),<br>  <span class="hljs-attr">getters</span>: &#123;<br>    <span class="hljs-attr">isLoggedIn</span>: <span class="hljs-function">(<span class="hljs-params">state</span>) =&gt;</span> <span class="hljs-title class_">Boolean</span>(state.<span class="hljs-property">token</span>),<br>  &#125;,<br>  <span class="hljs-attr">mutations</span>: &#123;<br>    <span class="hljs-title function_">SET_TOKEN</span>(<span class="hljs-params">state, token</span>) &#123;<br>      state.<span class="hljs-property">token</span> = token<br>    &#125;,<br>    <span class="hljs-title function_">SET_USER_INFO</span>(<span class="hljs-params">state, info</span>) &#123;<br>      state.<span class="hljs-property">userInfo</span> = info<br>    &#125;,<br>  &#125;,<br>  <span class="hljs-attr">actions</span>: &#123;<br>    <span class="hljs-keyword">async</span> <span class="hljs-title function_">login</span>(<span class="hljs-params">&#123; commit &#125;, &#123; username, password &#125;</span>) &#123;<br>      <span class="hljs-keyword">const</span> &#123; token, userInfo &#125; = <span class="hljs-keyword">await</span> api.<span class="hljs-title function_">login</span>(username, password)<br>      <span class="hljs-title function_">commit</span>(<span class="hljs-string">&#x27;SET_TOKEN&#x27;</span>, token)<br>      <span class="hljs-title function_">commit</span>(<span class="hljs-string">&#x27;SET_USER_INFO&#x27;</span>, userInfo)<br>    &#125;,<br>  &#125;,<br>&#125;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">default</span> <span class="hljs-title function_">createStore</span>(&#123;<br>  <span class="hljs-attr">modules</span>: &#123; <span class="hljs-attr">user</span>: userModule &#125;,<br>&#125;)<br></code></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs vue">&lt;script&gt;<br>import &#123; mapState, mapGetters &#125; from &#x27;vuex&#x27;<br><br>export default &#123;<br>  computed: &#123;<br>    // 借助命名空间字符串 + 辅助函数<br>    ...mapState(&#x27;user&#x27;, [&#x27;userInfo&#x27;]),<br>    ...mapGetters(&#x27;user&#x27;, [&#x27;isLoggedIn&#x27;]),<br>  &#125;,<br>  methods: &#123;<br>    // 没有辅助函数时，是字符串路径<br>    handleLogin() &#123;<br>      this.$store.dispatch(&#x27;user/login&#x27;, &#123; username: &#x27;admin&#x27;, password: &#x27;xxxxxxx&#x27; &#125;)<br>    &#125;,<br>  &#125;,<br>&#125;<br>&lt;/script&gt;<br></code></pre></td></tr></table></figure>
+
+<h3 id="2-3-为什么强制-mutations-必须同步"><a href="#2-3-为什么强制-mutations-必须同步" class="headerlink" title="2.3 为什么强制 mutations 必须同步"></a>2.3 为什么强制 mutations 必须同步</h3><p>这是 Vuex 最常被抱怨的设计，但它不是洁癖，是<strong>工程上的必要</strong>：</p>
+<p>DevTools 的时间旅行（time travel）依赖「每个 mutation 执行完，拍一次状态快照」。如果 mutation 里有 <code>setTimeout</code>，快照拍下的会是<strong>中间状态</strong>，回放时状态对不上，整个调试模型就垮了。所以 Vuex 干脆用约定（严格模式下直接报错）堵死异步 mutation：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-comment">// 开发环境开启严格模式后，绕过 mutation 直接改 state 会抛错</span><br>store.<span class="hljs-property">state</span>.<span class="hljs-property">user</span>.<span class="hljs-property">token</span> = <span class="hljs-string">&#x27;xxx&#x27;</span> <span class="hljs-comment">// ❌ Error: [vuex] do not mutate vuex store state outside mutation handlers</span><br></code></pre></td></tr></table></figure>
+
+<p>理解了这一点就理解了 Vuex 的一半：<strong>mutations&#x2F;actions 的分裂，是给 DevTools 交的「税」</strong>。</p>
+<h3 id="2-4-Vuex-的五个痛点"><a href="#2-4-Vuex-的五个痛点" class="headerlink" title="2.4 Vuex 的五个痛点"></a>2.4 Vuex 的五个痛点</h3><ol>
+<li><strong>mutations &#x2F; actions 样板代码</strong>。一个登录要写两个 mutation + 一个 action；同步逻辑被迫三处跳转。明明只是 <code>state.token = token</code> 一行的事。</li>
+<li><strong>modules 嵌套 + 字符串路径</strong>。<code>dispatch(&#39;user/login&#39;)</code>、<code>mapState(&#39;user&#39;, [...])</code>、子模块里取兄弟模块要 <code>rootState</code> &#x2F; <code>rootGetters</code>——类型和重构都不友好，改名只能全局搜字符串。</li>
+<li><strong>TypeScript 支持弱</strong>。Vue2 的 <code>this.$store</code> 没有类型上下文，需要手写 <code>declare module &#39;vuex&#39;</code> 类型增强和 InjectionKey；<code>mapState</code> 一族辅助函数基本放弃推导，getters 的返回类型要逐个手标。</li>
+<li><strong>单入口大仓库</strong>。所有模块集中注册进一个 store，代码分割、按需加载都别扭；<code>store.state.user.xxx</code> 的深层访问把模块结构焊死。</li>
+<li><strong>action 上下文对象心智负担</strong>。<code>{ state, commit, dispatch, rootState, rootGetters }</code> 一堆参数，嵌套模块里 <code>dispatch(&#39;other/action&#39;, null, { root: true })</code> 这类调用极易写错。</li>
+</ol>
+<p>Vuex4（Vue3 版）只是把内核换成 <code>reactive()</code>，这些 API 层面的债原样保留——官方也明确说了 Vuex 进入维护模式，Vue3 的答案是 Pinia。</p>
+<h2 id="三、Pinia：把-store-写成组合式函数"><a href="#三、Pinia：把-store-写成组合式函数" class="headerlink" title="三、Pinia：把 store 写成组合式函数"></a>三、Pinia：把 store 写成组合式函数</h2><h3 id="3-1-设计哲学"><a href="#3-1-设计哲学" class="headerlink" title="3.1 设计哲学"></a>3.1 设计哲学</h3><p>Pinia（「菠萝」）不再维护一棵模块树，而是：<strong>每个 store 就是一个带响应式的全局对象，靠 <code>defineStore(id, ...)</code> 的 id 天然拆分</strong>。它建立在 Vue3 响应式 API 之上，没有引入自己的响应式系统——这是它能把 API 砍薄的根本原因。</p>
+<h3 id="3-2-两种写法"><a href="#3-2-两种写法" class="headerlink" title="3.2 两种写法"></a>3.2 两种写法</h3><p><strong>Option Store</strong>（长得像 Vuex 模块，迁移友好）：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-comment">// stores/user.js</span><br><span class="hljs-keyword">import</span> &#123; defineStore &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;pinia&#x27;</span><br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> useUserStore = <span class="hljs-title function_">defineStore</span>(<span class="hljs-string">&#x27;user&#x27;</span>, &#123;<br>  <span class="hljs-attr">state</span>: <span class="hljs-function">() =&gt;</span> (&#123;<br>    <span class="hljs-attr">token</span>: <span class="hljs-string">&#x27;&#x27;</span>,<br>    <span class="hljs-attr">userInfo</span>: <span class="hljs-literal">null</span>,<br>  &#125;),<br>  <span class="hljs-attr">getters</span>: &#123;<br>    <span class="hljs-attr">isLoggedIn</span>: <span class="hljs-function">(<span class="hljs-params">state</span>) =&gt;</span> <span class="hljs-title class_">Boolean</span>(state.<span class="hljs-property">token</span>),<br>    <span class="hljs-comment">// getter 间互访用 this（需要显式标返回类型）</span><br>    <span class="hljs-title function_">displayName</span>(<span class="hljs-params">state</span>) &#123;<br>      <span class="hljs-keyword">return</span> <span class="hljs-variable language_">this</span>.<span class="hljs-property">userInfo</span>?.<span class="hljs-property">name</span> ?? <span class="hljs-string">&#x27;游客&#x27;</span><br>    &#125;,<br>  &#125;,<br>  <span class="hljs-attr">actions</span>: &#123;<br>    <span class="hljs-comment">// ✅ 同步、异步都在 action 里，改 state 直接改</span><br>    <span class="hljs-keyword">async</span> <span class="hljs-title function_">login</span>(<span class="hljs-params">username, password</span>) &#123;<br>      <span class="hljs-keyword">const</span> &#123; token, userInfo &#125; = <span class="hljs-keyword">await</span> api.<span class="hljs-title function_">login</span>(username, password)<br>      <span class="hljs-variable language_">this</span>.<span class="hljs-property">token</span> = token<br>      <span class="hljs-variable language_">this</span>.<span class="hljs-property">userInfo</span> = userInfo<br>    &#125;,<br>    <span class="hljs-title function_">logout</span>(<span class="hljs-params"></span>) &#123;<br>      <span class="hljs-variable language_">this</span>.$reset() <span class="hljs-comment">// 恢复到 state() 的初始值</span><br>    &#125;,<br>  &#125;,<br>&#125;)<br></code></pre></td></tr></table></figure>
+
+<p><strong>Setup Store</strong>（组合式 API 写法，推荐新代码使用）：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-comment">// stores/user.js</span><br><span class="hljs-keyword">import</span> &#123; defineStore &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;pinia&#x27;</span><br><span class="hljs-keyword">import</span> &#123; ref, computed &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vue&#x27;</span><br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> useUserStore = <span class="hljs-title function_">defineStore</span>(<span class="hljs-string">&#x27;user&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>  <span class="hljs-comment">// ref()   → state</span><br>  <span class="hljs-keyword">const</span> token = <span class="hljs-title function_">ref</span>(<span class="hljs-string">&#x27;&#x27;</span>)<br>  <span class="hljs-keyword">const</span> userInfo = <span class="hljs-title function_">ref</span>(<span class="hljs-literal">null</span>)<br><br>  <span class="hljs-comment">// computed() → getters</span><br>  <span class="hljs-keyword">const</span> isLoggedIn = <span class="hljs-title function_">computed</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-title class_">Boolean</span>(token.<span class="hljs-property">value</span>))<br><br>  <span class="hljs-comment">// function  → actions</span><br>  <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">login</span>(<span class="hljs-params">username, password</span>) &#123;<br>    <span class="hljs-keyword">const</span> res = <span class="hljs-keyword">await</span> api.<span class="hljs-title function_">login</span>(username, password)<br>    token.<span class="hljs-property">value</span> = res.<span class="hljs-property">token</span><br>    userInfo.<span class="hljs-property">value</span> = res.<span class="hljs-property">userInfo</span><br>  &#125;<br><br>  <span class="hljs-keyword">return</span> &#123; token, userInfo, isLoggedIn, login &#125;<br>&#125;)<br></code></pre></td></tr></table></figure>
+
+<p>Setup 写法的额外收益：store 内可以自由使用 <code>watch</code>、<code>provide/inject</code>、路由实例甚至其他组合式函数，且能按需只暴露部分能力（比如不 return 某个 ref，它就成了 store 的「私有状态」）。一个约定：<strong>state 用 <code>ref</code>，getter 用 <code>computed</code>，action 用普通函数</strong>。</p>
+<h3 id="3-3-组件里使用"><a href="#3-3-组件里使用" class="headerlink" title="3.3 组件里使用"></a>3.3 组件里使用</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs vue">&lt;script setup&gt;<br>import &#123; storeToRefs &#125; from &#x27;pinia&#x27;<br>import &#123; useUserStore &#125; from &#x27;@/stores/user&#x27;<br><br>const userStore = useUserStore()<br><br>// ⚠️ 直接解构会丢响应性（见 5.1）<br>const &#123; token, userInfo &#125; = storeToRefs(userStore)<br>// action 是普通函数，可以直接解构<br>const &#123; login &#125; = userStore<br><br>// 直接读写<br>userStore.token = &#x27;new-token&#x27;<br>await login(&#x27;a&#x27;, &#x27;b&#x27;)<br>&lt;/script&gt;<br></code></pre></td></tr></table></figure>
+
+<p>注意连 <code>$store</code> 都没有了——store 本身就是那个对象，<code>userStore.token</code> 直接访问。</p>
+<h3 id="3-4-为什么删掉-mutations-还能时间旅行"><a href="#3-4-为什么删掉-mutations-还能时间旅行" class="headerlink" title="3.4 为什么删掉 mutations 还能时间旅行"></a>3.4 为什么删掉 mutations 还能时间旅行</h3><p>这是 Pinia 最核心的一个「为什么」。</p>
+<p>Vuex 时代，追踪变更是靠「你承诺只通过 mutation 改」，DevTools 钩在 mutation 的执行边界上拍快照。Pinia 换了思路：<strong>state 本身就是 <code>reactive</code> 对象，任何途径的修改（action 里改、组件里改、<code>$patch</code> 批量改）都会触发响应式依赖</strong>。Pinia 通过 <code>$subscribe</code> 订阅这层响应式变化，把每次变更连同时间戳记录为事件序列交给 DevTools——不需要你先承诺「从哪个门进」，<strong>门本身消失了，但每个访客仍然被登记</strong>。</p>
+<p>所以严格模式也没有存在的必要了：直接 <code>store.token = &#39;x&#39;</code> 不会破坏任何追踪能力，DevTools 照样能看到这次变更。代价只是「变更入口分散、不利于约束团队规范」这类软性问题，由团队规范而不是框架来管。</p>
+<h3 id="3-5-实例-API：-patch-reset-subscribe-onAction"><a href="#3-5-实例-API：-patch-reset-subscribe-onAction" class="headerlink" title="3.5 实例 API：$patch &#x2F; $reset &#x2F; $subscribe &#x2F; $onAction"></a>3.5 实例 API：$patch &#x2F; $reset &#x2F; $subscribe &#x2F; $onAction</h3><figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">const</span> userStore = <span class="hljs-title function_">useUserStore</span>()<br><br><span class="hljs-comment">// $patch：批量修改，触发一次订阅通知（对象式与函数式）</span><br>userStore.$patch(&#123; <span class="hljs-attr">token</span>: <span class="hljs-string">&#x27;a&#x27;</span>, <span class="hljs-attr">userInfo</span>: &#123; <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;k&#x27;</span> &#125; &#125;)<br>userStore.$patch(<span class="hljs-function">(<span class="hljs-params">state</span>) =&gt;</span> &#123;<br>  state.<span class="hljs-property">userInfo</span>.<span class="hljs-property">name</span> = <span class="hljs-string">&#x27;k&#x27;</span><br>  state.<span class="hljs-property">token</span> = <span class="hljs-string">&#x27;a&#x27;</span><br>&#125;)<br><br><span class="hljs-comment">// $reset：重置为初始 state（⚠️ 仅 Option Store 自带；</span><br><span class="hljs-comment">// Setup Store 没有 state() 工厂，需自己实现一个 reset action）</span><br><br><span class="hljs-comment">// $subscribe：监听 state 变化（持久化的基础）</span><br>userStore.$subscribe(<span class="hljs-function">(<span class="hljs-params">mutation, state</span>) =&gt;</span> &#123;<br>  <span class="hljs-comment">// mutation.type: &#x27;direct&#x27; | &#x27;patch object&#x27; | &#x27;patch function&#x27;</span><br>  <span class="hljs-comment">// mutation.storeId: &#x27;user&#x27;</span><br>  <span class="hljs-variable language_">localStorage</span>.<span class="hljs-title function_">setItem</span>(<span class="hljs-string">&#x27;user&#x27;</span>, <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(state))<br>&#125;, &#123; <span class="hljs-attr">detached</span>: <span class="hljs-literal">true</span> &#125;) <span class="hljs-comment">// detached: 组件卸载后仍继续订阅</span><br><br><span class="hljs-comment">// $onAction：拦截 action 的执行（日志、埋点、错误上报）</span><br><span class="hljs-keyword">const</span> unsubscribe = userStore.$onAction(&#123;<br>  <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;login&#x27;</span>,<br>  <span class="hljs-attr">after</span>: <span class="hljs-function">(<span class="hljs-params">result</span>) =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`<span class="hljs-subst">$&#123;name&#125;</span> 成功`</span>, result),<br>  <span class="hljs-attr">onError</span>: <span class="hljs-function">(<span class="hljs-params">err</span>) =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">error</span>(<span class="hljs-string">`<span class="hljs-subst">$&#123;name&#125;</span> 失败`</span>, err),<br>&#125;)<br></code></pre></td></tr></table></figure>
+
+<h3 id="3-6-原理速览"><a href="#3-6-原理速览" class="headerlink" title="3.6 原理速览"></a>3.6 原理速览</h3><p>Setup Store 的实现简单到可以口述：<code>defineStore(id, setup)</code> 内部用 <code>effectScope()</code> 开一个独立作用域，在里面执行你的 setup 函数——<code>ref</code> 就是 state，<code>computed</code> 就是 getters，返回的对象整体包一层 <code>reactive</code>（所以 <code>userStore.token</code> 会自动解包 ref）。<code>effectScope</code> 保证这些副作用可以被统一追踪和销毁，与任何组件实例<strong>无耦合</strong>——这就是 store 能活在组件外、且支持 HMR（热更新时销毁旧 scope 重建）的原因。相比之下，Vuex3 是把 state 塞进一个隐藏的 <code>new Vue({ data })</code> 实例、Vuex4 换成 <code>reactive()</code>，历史包袱一目了然。</p>
+<h2 id="四、逐项对比"><a href="#四、逐项对比" class="headerlink" title="四、逐项对比"></a>四、逐项对比</h2><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>Vuex 4</th>
+<th>Pinia</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>心智模型</td>
+<td>单一大仓库 + 嵌套 modules</td>
+<td>扁平的多 store，按 id 拆分</td>
+</tr>
+<tr>
+<td>修改入口</td>
+<td>必须经 mutations（同步）&#x2F; actions（异步）</td>
+<td>action 或任意处直接改，<code>$patch</code> 批量</td>
+</tr>
+<tr>
+<td>TypeScript</td>
+<td>弱，需手写类型增强</td>
+<td>全链路自动推导</td>
+</tr>
+<tr>
+<td>组合式 API</td>
+<td>先天不适配（Vuex4 仅兼容运行）</td>
+<td>原生即为组合式设计</td>
+</tr>
+<tr>
+<td>模块间互访</td>
+<td><code>rootState</code> &#x2F; <code>rootGetters</code> &#x2F; <code>{ root: true }</code></td>
+<td>直接 <code>useOtherStore()</code>，或 getter&#x2F;action 里组合</td>
+</tr>
+<tr>
+<td>代码分割</td>
+<td>单入口，别扭</td>
+<td>每个 store 独立文件，天然友好</td>
+</tr>
+<tr>
+<td>体积</td>
+<td>约数 KB（gzip）</td>
+<td>约 1KB（gzip）</td>
+</tr>
+<tr>
+<td>DevTools</td>
+<td>时间旅行、时间线</td>
+<td>同样支持，且 store 树更直观</td>
+</tr>
+<tr>
+<td>插件</td>
+<td>store 插件</td>
+<td>context 更丰富（含 <code>$subscribe</code>&#x2F;<code>$onAction</code> 钩子）</td>
+</tr>
+<tr>
+<td>严格模式</td>
+<td>有（dev 下抓非法修改）</td>
+<td>无，也不需要（见 3.4）</td>
+</tr>
+<tr>
+<td>Vue 版本</td>
+<td>Vue2（Vuex3）&#x2F; Vue3（Vuex4）</td>
+<td>Vue3；Vue 2.7 也可用</td>
+</tr>
+</tbody></table>
+<p>几个值得展开的点：</p>
+<p><strong>TypeScript 是体验差距最大的地方。</strong> Pinia 里从 <code>state</code> 到 <code>getters</code> 到组件里的 <code>storeToRefs</code>，类型全程自动流动，改一个接口字段，所有消费处编译器立刻标红。Vuex 里类型在 <code>commit(&#39;user/SET_TOKEN&#39;, ...)</code> 这种字符串处断裂，只能靠自律。</p>
+<p><strong>store 之间可以像普通模块一样组合</strong>，这是 Vuex 做不到的：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-comment">// stores/cart.js 里使用 user store</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> useCartStore = <span class="hljs-title function_">defineStore</span>(<span class="hljs-string">&#x27;cart&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>  <span class="hljs-keyword">const</span> items = <span class="hljs-title function_">ref</span>([])<br><br>  <span class="hljs-keyword">const</span> userStore = <span class="hljs-title function_">useUserStore</span>() <span class="hljs-comment">// 在 getter/action 执行时调用即可</span><br><br>  <span class="hljs-keyword">const</span> totalPrice = <span class="hljs-title function_">computed</span>(<span class="hljs-function">() =&gt;</span><br>    userStore.<span class="hljs-property">userInfo</span>?.<span class="hljs-property">vip</span><br>      ? items.<span class="hljs-property">value</span>.<span class="hljs-title function_">reduce</span>(<span class="hljs-function">(<span class="hljs-params">s, i</span>) =&gt;</span> s + i.<span class="hljs-property">price</span> * <span class="hljs-number">0.9</span>, <span class="hljs-number">0</span>)<br>      : items.<span class="hljs-property">value</span>.<span class="hljs-title function_">reduce</span>(<span class="hljs-function">(<span class="hljs-params">s, i</span>) =&gt;</span> s + i.<span class="hljs-property">price</span>, <span class="hljs-number">0</span>),<br>  )<br><br>  <span class="hljs-keyword">return</span> &#123; items, totalPrice &#125;<br>&#125;)<br></code></pre></td></tr></table></figure>
+
+<p>注意：在 setup store 的<strong>顶层</strong>调用其他 store 是允许的（只要那时 pinia 已激活），跨 store 循环依赖时则要放到 getter&#x2F;action 内部延迟调用。</p>
+<h2 id="五、实战技巧与易错点"><a href="#五、实战技巧与易错点" class="headerlink" title="五、实战技巧与易错点"></a>五、实战技巧与易错点</h2><h3 id="5-1-解构丢响应性：必须用-storeToRefs"><a href="#5-1-解构丢响应性：必须用-storeToRefs" class="headerlink" title="5.1 解构丢响应性：必须用 storeToRefs"></a>5.1 解构丢响应性：必须用 storeToRefs</h3><figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">const</span> &#123; token &#125; = <span class="hljs-title function_">useUserStore</span>() <span class="hljs-comment">// ❌ token 变成一次性的纯字符串</span><br></code></pre></td></tr></table></figure>
+
+<p>原因和 <code>props</code> 解构一样：<code>store.token</code> 是对 reactive 对象属性的<strong>读取</strong>，拿到的是值的快照，丢失了与源对象的联系。<code>storeToRefs</code> 的实现本质就是对 state 和 getters 逐个 <code>toRef</code>：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">const</span> &#123; token &#125; = <span class="hljs-title function_">storeToRefs</span>(userStore) <span class="hljs-comment">// ✅ Ref&lt;string&gt;，保持响应</span><br><span class="hljs-keyword">const</span> &#123; login &#125; = userStore              <span class="hljs-comment">// ✅ action 是普通函数，随便解构</span><br></code></pre></td></tr></table></figure>
+
+<h3 id="5-2-在组件外使用-store"><a href="#5-2-在组件外使用-store" class="headerlink" title="5.2 在组件外使用 store"></a>5.2 在组件外使用 store</h3><p>store 依赖已安装的 pinia 实例，而模块顶层的执行时机早于 <code>app.use(pinia)</code>：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-comment">// ❌ 模块加载时立即调用，此时 pinia 还没激活</span><br><span class="hljs-keyword">const</span> userStore = <span class="hljs-title function_">useUserStore</span>() <span class="hljs-comment">// getActivePinia was called with no active Pinia</span><br><br><span class="hljs-comment">// ✅ 方案一：延迟到运行时调用（路由守卫、axios 拦截器的回调本身就是延迟执行的）</span><br>router.<span class="hljs-title function_">beforeEach</span>(<span class="hljs-function">(<span class="hljs-params">to</span>) =&gt;</span> &#123;<br>  <span class="hljs-keyword">const</span> userStore = <span class="hljs-title function_">useUserStore</span>() <span class="hljs-comment">// 此时 app 已启动，OK</span><br>  <span class="hljs-keyword">if</span> (to.<span class="hljs-property">meta</span>.<span class="hljs-property">auth</span> &amp;&amp; !userStore.<span class="hljs-property">isLoggedIn</span>) <span class="hljs-keyword">return</span> <span class="hljs-string">&#x27;/login&#x27;</span><br>&#125;)<br><br><span class="hljs-comment">// ✅ 方案二：模块顶层就要用，显式传入 pinia 实例</span><br><span class="hljs-keyword">import</span> &#123; pinia &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./pinia&#x27;</span> <span class="hljs-comment">// 单独导出的 pinia 实例</span><br><span class="hljs-keyword">const</span> userStore = <span class="hljs-title function_">useUserStore</span>(pinia)<br></code></pre></td></tr></table></figure>
+
+<p>方案二是 SSR 和单元测试（每次 createTestingPinia）场景的标准做法。</p>
+<h3 id="5-3-持久化：一个-20-行的插件"><a href="#5-3-持久化：一个-20-行的插件" class="headerlink" title="5.3 持久化：一个 20 行的插件"></a>5.3 持久化：一个 20 行的插件</h3><p>Pinia 插件是一个函数，作用于每个 store，返回值会被合并进 store（可用于添加 <code>$reset</code> 增强等）：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-comment">// plugins/persist.js</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">persist</span>(<span class="hljs-params">&#123; store &#125;</span>) &#123;<br>  <span class="hljs-keyword">const</span> saved = <span class="hljs-variable language_">localStorage</span>.<span class="hljs-title function_">getItem</span>(store.<span class="hljs-property">$id</span>)<br>  <span class="hljs-keyword">if</span> (saved) store.$patch(<span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">parse</span>(saved))<br><br>  store.$subscribe(<span class="hljs-function">(<span class="hljs-params">_mutation, state</span>) =&gt;</span> &#123;<br>    <span class="hljs-variable language_">localStorage</span>.<span class="hljs-title function_">setItem</span>(store.<span class="hljs-property">$id</span>, <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(state))<br>  &#125;)<br>&#125;<br><br><span class="hljs-comment">// main.js</span><br>pinia.<span class="hljs-title function_">use</span>(persist)<br></code></pre></td></tr></table></figure>
+
+<p>生产环境一般直接用 <code>pinia-plugin-persistedstate</code>，支持按 store 配置 <code>persist: { paths: [&#39;token&#39;] }</code> 做字段级持久化——原理就是上面这段代码加配置化。</p>
+<h3 id="5-4-Setup-Store-的私有状态与-reset"><a href="#5-4-Setup-Store-的私有状态与-reset" class="headerlink" title="5.4 Setup Store 的私有状态与 $reset"></a>5.4 Setup Store 的私有状态与 $reset</h3><p>setup 函数里不 return 的变量就是 store 的私有状态，外界（包括 DevTools）看不到；代价是 <code>$reset</code> 失效，需要自己写：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> useUserStore = <span class="hljs-title function_">defineStore</span>(<span class="hljs-string">&#x27;user&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>  <span class="hljs-keyword">const</span> token = <span class="hljs-title function_">ref</span>(<span class="hljs-string">&#x27;&#x27;</span>)<br><br>  <span class="hljs-keyword">function</span> <span class="hljs-title function_">$reset</span>(<span class="hljs-params"></span>) &#123;<br>    token.<span class="hljs-property">value</span> = <span class="hljs-string">&#x27;&#x27;</span><br>  &#125;<br>  <span class="hljs-keyword">return</span> &#123; token, $reset &#125;<br>&#125;)<br></code></pre></td></tr></table></figure>
+
+<h3 id="5-5-「轻量替代品」：模块级-ref"><a href="#5-5-「轻量替代品」：模块级-ref" class="headerlink" title="5.5 「轻量替代品」：模块级 ref"></a>5.5 「轻量替代品」：模块级 ref</h3><p>如果只是两三个组件共享一个小状态，可以不引库：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-comment">// composables/useTheme.js</span><br><span class="hljs-keyword">import</span> &#123; ref &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vue&#x27;</span><br><span class="hljs-keyword">const</span> theme = <span class="hljs-title function_">ref</span>(<span class="hljs-string">&#x27;light&#x27;</span>) <span class="hljs-comment">// 模块作用域，天然全局单例</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">useTheme</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-keyword">const</span> <span class="hljs-title function_">toggle</span> = (<span class="hljs-params"></span>) =&gt; (theme.<span class="hljs-property">value</span> = theme.<span class="hljs-property">value</span> === <span class="hljs-string">&#x27;light&#x27;</span> ? <span class="hljs-string">&#x27;dark&#x27;</span> : <span class="hljs-string">&#x27;light&#x27;</span>)<br>  <span class="hljs-keyword">return</span> &#123; theme, toggle &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>它的本质就是一个「手写的 setup store」。区别在于没有 DevTools 集成、<code>$patch</code>、插件体系和 SSR 安全——状态规模一上去，这些就会从「nice to have」变成刚需，那时再换 Pinia，迁移成本几乎为零（因为写法同构）。</p>
+<h2 id="六、Vuex-→-Pinia-迁移指南"><a href="#六、Vuex-→-Pinia-迁移指南" class="headerlink" title="六、Vuex → Pinia 迁移指南"></a>六、Vuex → Pinia 迁移指南</h2><p>两个库可以<strong>共存过渡</strong>（Vuex 照常 <code>app.use(store)</code>，Pinia 照常 <code>app.use(pinia)</code>），建议按模块逐个迁移、迁移完删除。</p>
+<p>映射关系：</p>
+<table>
+<thead>
+<tr>
+<th>Vuex</th>
+<th>Pinia (Option)</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>state: () =&gt; ({...})</code></td>
+<td><code>state: () =&gt; ({...})</code></td>
+<td>一致</td>
+</tr>
+<tr>
+<td><code>getters</code></td>
+<td><code>getters</code></td>
+<td>去掉 namespaced 概念</td>
+</tr>
+<tr>
+<td><code>mutations</code> + <code>actions</code></td>
+<td><code>actions</code></td>
+<td>合并；<code>SET_XXX</code> 大写命名可顺手改成语义化方法</td>
+</tr>
+<tr>
+<td><code>modules: { user }</code></td>
+<td><code>defineStore(&#39;user&#39;, ...)</code> 独立文件</td>
+<td>嵌套模块拍平</td>
+</tr>
+<tr>
+<td><code>this.$store.commit(&#39;user/login&#39;)</code></td>
+<td><code>userStore.login()</code></td>
+<td>字符串 → 方法调用</td>
+</tr>
+<tr>
+<td><code>mapState(&#39;user&#39;, [...])</code></td>
+<td><code>storeToRefs(useUserStore())</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>store.dispatch(&#39;user/login&#39;)</code></td>
+<td><code>userStore.login()</code></td>
+<td></td>
+</tr>
+</tbody></table>
+<p>迁移前的 user 模块（Vuex）和迁移后（Pinia）对照：</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs js"><span class="hljs-comment">// ── Vuex ──</span><br><span class="hljs-keyword">const</span> userModule = &#123;<br>  <span class="hljs-attr">namespaced</span>: <span class="hljs-literal">true</span>,<br>  <span class="hljs-attr">state</span>: <span class="hljs-function">() =&gt;</span> (&#123; <span class="hljs-attr">token</span>: <span class="hljs-string">&#x27;&#x27;</span> &#125;),<br>  <span class="hljs-attr">mutations</span>: &#123;<br>    <span class="hljs-title function_">SET_TOKEN</span>(<span class="hljs-params">state, token</span>) &#123; state.<span class="hljs-property">token</span> = token &#125;,<br>    <span class="hljs-title function_">CLEAR_TOKEN</span>(<span class="hljs-params">state</span>) &#123; state.<span class="hljs-property">token</span> = <span class="hljs-string">&#x27;&#x27;</span> &#125;,<br>  &#125;,<br>  <span class="hljs-attr">actions</span>: &#123;<br>    <span class="hljs-keyword">async</span> <span class="hljs-title function_">login</span>(<span class="hljs-params">&#123; commit &#125;, form</span>) &#123;<br>      <span class="hljs-keyword">const</span> &#123; token &#125; = <span class="hljs-keyword">await</span> api.<span class="hljs-title function_">login</span>(form)<br>      <span class="hljs-title function_">commit</span>(<span class="hljs-string">&#x27;SET_TOKEN&#x27;</span>, token)<br>    &#125;,<br>    <span class="hljs-title function_">logout</span>(<span class="hljs-params">&#123; commit &#125;</span>) &#123;<br>      <span class="hljs-title function_">commit</span>(<span class="hljs-string">&#x27;CLEAR_TOKEN&#x27;</span>)<br>    &#125;,<br>  &#125;,<br>&#125;<br><br><span class="hljs-comment">// ── Pinia ──</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> useUserStore = <span class="hljs-title function_">defineStore</span>(<span class="hljs-string">&#x27;user&#x27;</span>, &#123;<br>  <span class="hljs-attr">state</span>: <span class="hljs-function">() =&gt;</span> (&#123; <span class="hljs-attr">token</span>: <span class="hljs-string">&#x27;&#x27;</span> &#125;),<br>  <span class="hljs-attr">actions</span>: &#123;<br>    <span class="hljs-keyword">async</span> <span class="hljs-title function_">login</span>(<span class="hljs-params">form</span>) &#123;<br>      <span class="hljs-variable language_">this</span>.<span class="hljs-property">token</span> = (<span class="hljs-keyword">await</span> api.<span class="hljs-title function_">login</span>(form)).<span class="hljs-property">token</span><br>    &#125;,<br>    <span class="hljs-title function_">logout</span>(<span class="hljs-params"></span>) &#123;<br>      <span class="hljs-variable language_">this</span>.$reset()<br>    &#125;,<br>  &#125;,<br>&#125;)<br></code></pre></td></tr></table></figure>
+
+<p>代码量减半不是重点，重点是<strong>字符串派发全部变成了可跳转、可推导类型的方法调用</strong>。</p>
+<h2 id="七、高频面试题速答"><a href="#七、高频面试题速答" class="headerlink" title="七、高频面试题速答"></a>七、高频面试题速答</h2><p><strong>1. 为什么 Pinia 去掉 mutations？</strong><br>因为 mutations 存在的唯一理由（同步边界保证 DevTools 快照可靠）在 Vue3 响应式系统下不再必要：state 是 <code>reactive</code> 对象，任何途径的修改都可被 <code>$subscribe</code> 观测并记录，DevTools 能力无损。</p>
+<p><strong>2. Pinia 为什么不需要 strict 模式？</strong><br>同上。Vuex 的严格模式防的是「绕过 mutation 导致 DevTools 看不见」；Pinia 里不存在看不见的修改，直接改 state 只是风格问题，不是正确性问题。</p>
+<p><strong>3. 直接解构 store 为什么丢响应性？</strong><br><code>const { token } = store</code> 是对 reactive 属性的一次性读取，拿到原始值。要用 <code>storeToRefs</code>（内部 <code>toRef</code> 保持引用联系）；action 是普通函数不受影响。</p>
+<p><strong>4. Pinia 和 Vuex 会长期并存吗？</strong><br>不会。Pinia 官方定位就是「下一代 Vuex」，Vuex 已进入维护模式（只修 bug 不加特性），Vue 官方文档状态管理章节只推荐 Pinia。</p>
+<p><strong>5. 没有嵌套 modules，大型项目几十个 store 不会乱吗？</strong><br>「扁平 + 组合」优于「树形 + 命名空间」：模块间依赖显式化为 <code>useOtherStore()</code> 调用，跨域复用靠组合而非 <code>rootState</code>；按业务域拆文件（<code>stores/user.js</code>、<code>stores/cart.js</code>）后，目录即架构。</p>
+<p><strong>6. $patch 和直接赋值有什么区别？</strong><br><code>$patch</code> 把多次修改合并为<strong>一次</strong>订阅通知，并且以 <code>patch object</code> 类型记录进 DevTools；批量更新时用它可减少订阅回调（如持久化写 localStorage）的触发次数。</p>
+<h2 id="八、总结"><a href="#八、总结" class="headerlink" title="八、总结"></a>八、总结</h2><table>
+<thead>
+<tr>
+<th></th>
+<th>一句话</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Vuex 的本质</td>
+<td>用「约定 + 强制」换可追踪性：mutations 是给 DevTools 交的税</td>
+</tr>
+<tr>
+<td>Pinia 的本质</td>
+<td>响应式系统本身可观测，税不用交了；store 即组合式函数，模块化即文件</td>
+</tr>
+<tr>
+<td>选型</td>
+<td>Vue3 新项目 → Pinia（唯一答案）；Vue2 存量 → Vuex4 不必动；简单共享 → 模块级 ref &#x2F; provide-inject</td>
+</tr>
+</tbody></table>
+<p>真正值得带走的不是 API 对照表，而是这条主线：<strong>状态管理库的一切设计，都是围绕「如何让共享状态的变化可观测、可追踪」展开的</strong>——Vuex 用纪律实现它，Pinia 用代理实现的响应式系统实现它。理解了这一点，下一代的方案再怎么变，你都能在十分钟内看懂它。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io">StellaCode98</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io/2026/09/10/pinia-vs-vuex/">https://stellacode98.github.io/2026/09/10/pinia-vs-vuex/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://stellacode98.github.io" target="_blank">眉眼如初、</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/Vue3/">Vue3</a><a class="post-meta__tags" href="/tags/Pinia/">Pinia</a><a class="post-meta__tags" href="/tags/Vue2/">Vue2</a><a class="post-meta__tags" href="/tags/Vuex/">Vuex</a><a class="post-meta__tags" href="/tags/%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86/">状态管理</a></div><div class="post-share"><div class="social-share" data-image="/img/avatar.jpg" data-sites="wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/09/10/ts-type-safe-request/" title="泛型与条件类型实战：写一个类型安全的请求封装"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">泛型与条件类型实战：写一个类型安全的请求封装</div></div><div class="info-2"><div class="info-item-1">这篇文章只做一件事：把一个 any 满天飞的请求封装，一步步改造成调用处零手写类型、零类型断言的类型安全封装。所有「类型体操」都不为炫技——每一步都对应一个真实的工程痛点。  先说结论：类型安全的请求封装，核心思路不是「在调用处标注类型」，而是让 API 定义表成为唯一数据源——url、method、参数类型、返回类型都写在一张表里，然后用 typeof + keyof + 索引访问取到某个 API 的定义，用条件类型 + infer 从定义里把参数和返回值「解构」出来，用条件类型 + 可变元组表达「有 params 必传、没有就不能传」。调用处一个尖括号都不写，类型全部自动流动，而且写错参数名、传错类型、忘记写返回类型，都在编译期报错。    一、痛点：一个典型的 any 封装几乎所有项目都有这个文件： 12345678910// utils/request.ts —— 祖传版本import axios from &#x27;axios&#x27;export function get&lt;T = any&gt;(url: string, params?: any): Pro...</div></div></div></a><a class="pagination-related" href="/2026/09/10/typescript-advanced-map/" title="TypeScript 进阶地图：从「会用」到「会设计类型」"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">TypeScript 进阶地图：从「会用」到「会设计类型」</div></div><div class="info-2"><div class="info-item-1">先对齐一个观察：团队里 TS 写了两年的人，多数停在「会用」——变量有标注、接口有 interface、组件 props 有类型，遇到搞不定的场景一个 any 逃之夭夭。这不是姿势问题，是没有完成一次视角切换：  会用 TS 的人把类型当「描述」：给已经写好的代码贴标签。会设计类型的人把类型当「约束」：先想清楚问题的合法状态空间，让非法状态在类型层面就无法表示。  这篇就把从前者到后者的路径画成一张地图。结论先放这： 12「会用」→「会设计」不是学更多语法，而是换一个问题：  从「这个值是什么类型」 换成 「这个类型允许哪些值存在」    一、分界线长什么样：一个所有前端都写过的例子请求状态。三个字段的写法人人写过： 123456// 「会用」版：三个独立字段interface RequestState&lt;T&gt; &#123;  data: T | null  error: Error | null  loading: boolean&#125;  看起来无害，算一下状态空间：data 两种 × error 两种 × loading 两种 &#x3D; 8 种组合，其中 ...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/09/09/front-end-permission/" title="前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？</div></div><div class="info-2"><div class="info-item-1"> 这是真实项目复盘系列的第二篇。这个 Vue3 + Vite + Pinia + Ant Design Vue 的后台系统里，权限是典型的”隐形基础设施”：平时没人注意它，直到某天测试提了个 bug——“为什么这个角色看不到导出按钮”。本文把这套权限体系完整拆开：登录凭证怎么存、权限码怎么建模、按钮和菜单怎么按权限显隐、角色权限在哪个界面配出来，以及一个几乎所有后台项目都会遇到、也最容易做错的问题——数据权限（数据范围过滤）到底放在前端还是后端。先说结论：这个项目把数据权限完全交给了后端，前端只做了功能层（菜单&#x2F;按钮）权限。为什么这样选、边界在哪，第 7 节详细展开。  目录 0. 前言：前端权限到底防谁 1. 登录与凭证：token 从哪来，权限快照存哪去 2. 权限数据模型：两张 Map 与「模块:动作」权限码 3. 判断核心：hasBtnAuth &#x2F; hasAuth 双函数 4. 双指令：v-auth 与 v-menuAuth 5. 三层显隐实战：模块入口 → Tab → 按钮 6. 权限的配置面：角色管理与权限树 7. 数据权限：这一层前端做了什么、该...</div></div></div></a><a class="pagination-related" href="/2026/09/09/vue-responsive-contrast/" title="Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 Proxy"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 Proxy</div></div><div class="info-2"><div class="info-item-1">Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 ProxyVue 最核心的能力之一，就是响应式。 在使用 Vue 开发应用时，我们通常只需要修改数据： 1state.count++  页面就会自动发生变化。 开发者并不需要手动查找 DOM，再修改对应的节点。 123456789修改数据   ↓响应式系统感知变化   ↓找到依赖该数据的逻辑   ↓重新执行相关逻辑   ↓视图更新  这背后就是 Vue 响应式系统所解决的问题。 Vue2 和 Vue3 都实现了这套机制，但底层实现存在比较明显的区别： 12345678910111213Vue2Object.defineProperty        ↓   getter / setter        ↓   Dep / WatcherVue3      Proxy        ↓  track / trigger        ↓      effect  从 Vue2 到 Vue3，并不只是简单地把一个 API 换成另一个 API，而是响应式系统整体设计的一次变化。 本文从 Obje...</div></div></div></a><a class="pagination-related" href="/2026/09/09/cesium-data-loading/" title="Cesium 数据加载实战：从免 npm 引入到视口驱动的增量上球"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">Cesium 数据加载实战：从免 npm 引入到视口驱动的增量上球</div></div><div class="info-2"><div class="info-item-1"> 这篇文章不是 Cesium 入门教程，而是一次真实项目的落地复盘。最近负责的 Vue3 + Vite 项目里有一块三维地图：CesiumJS 1.123，渲染几十类基础设施（变电站、发电厂、线路……）的点线面数据，支持视口内动态加载、拓扑流动网络、实时事件告警。网上 Cesium 教程大多停留在「new 一个 Viewer + GeoJsonDataSource.load 一个文件」，而真实项目里你要回答的问题其实是：内网离线环境怎么跑、几万个实体怎么不卡、拖动地图时数据怎么增量进出、内存怎么不涨爆。本文按数据流动的顺序，把这条链路从头到尾拆开讲。所有代码都来自这个真实项目，文末附完整文件地图。  目录 0. 前言：一个真实的 Cesium 项目长什么样 1. 加载 Cesium 本体：不用 npm、不用 vite-plugin-cesium 2. Viewer 初始化：先拿到一个”干净”的球 3. 影像底图加载：配置驱动的多源图层 4. 业务数据上球：为什么放弃 Entity，改用 Primitive 5. 视口驱动的增量加载：只请求”看得见”的数据 6. 让数据”活”起来：...</div></div></div></a><a class="pagination-related" href="/2026/09/09/ai-from-streaming/" title="前端工程师的 AI 入门：从流式接口到落地一个 AI 应用"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">前端工程师的 AI 入门：从流式接口到落地一个 AI 应用</div></div><div class="info-2"><div class="info-item-1"> 这篇文章不是概念科普，而是一次真实的落地复盘。最近我在自己的 Vue3 后台管理项目（vue3_admin）里完整实现了一个 AI 智能问答模块：支持 SSE 流式打字机输出、多轮对话记忆、Function Calling 工具调用、可视化组件渲染、会话持久化。本文把这条链路从头到尾拆开讲——为什么需要流式、前端怎么手写 SSE 解析器、Function Calling 的两轮循环到底转了什么、以及从 demo 到可用应用之间隔着哪些工程细节。所有代码都来自这个真实模块，文末附完整文件地图。  目录 0. 前言：前端工程师离 AI 应用有多远 1. 认识流式接口：AI 的回复为什么是”蹦”出来的 2. 服务端：把模型的流转发给浏览器 3. 前端：手写一个 SSE 解析器 4. 从”流”到”聊天界面”：状态编排层 5. 让 AI 用上你的函数：Function Calling 6. 落地成应用：demo 和工程之间隔着什么 7. 展望：MCP 离我们还有多远 8. 写在最后   0. 前言：前端工程师离 AI 应用有多远打开 ChatGPT 或者任何 AI 对话产品，仔细观察它的...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">StellaCode98</div><div class="author-info-description">记录前端学习与开发中的思考</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">27</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">75</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">24</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/StellaCode98"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/StellaCode98" target="_blank" title="GitHub"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">欢迎来到我的小站，这里记录我的学习笔记与实践心得</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86"><span class="toc-number">1.</span> <span class="toc-text">一、为什么需要状态管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81Vuex%EF%BC%9A%E4%B8%AD%E5%BF%83%E5%8C%96%E4%BB%93%E5%BA%93%E4%B8%8E%E5%8D%95%E5%90%91%E6%95%B0%E6%8D%AE%E6%B5%81"><span class="toc-number">2.</span> <span class="toc-text">二、Vuex：中心化仓库与单向数据流</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E5%BF%83%E6%99%BA%E6%A8%A1%E5%9E%8B"><span class="toc-number">2.1.</span> <span class="toc-text">2.1 心智模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-%E5%AE%8C%E6%95%B4%E7%A4%BA%E4%BE%8B"><span class="toc-number">2.2.</span> <span class="toc-text">2.2 完整示例</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BC%BA%E5%88%B6-mutations-%E5%BF%85%E9%A1%BB%E5%90%8C%E6%AD%A5"><span class="toc-number">2.3.</span> <span class="toc-text">2.3 为什么强制 mutations 必须同步</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-4-Vuex-%E7%9A%84%E4%BA%94%E4%B8%AA%E7%97%9B%E7%82%B9"><span class="toc-number">2.4.</span> <span class="toc-text">2.4 Vuex 的五个痛点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81Pinia%EF%BC%9A%E6%8A%8A-store-%E5%86%99%E6%88%90%E7%BB%84%E5%90%88%E5%BC%8F%E5%87%BD%E6%95%B0"><span class="toc-number">3.</span> <span class="toc-text">三、Pinia：把 store 写成组合式函数</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E8%AE%BE%E8%AE%A1%E5%93%B2%E5%AD%A6"><span class="toc-number">3.1.</span> <span class="toc-text">3.1 设计哲学</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E4%B8%A4%E7%A7%8D%E5%86%99%E6%B3%95"><span class="toc-number">3.2.</span> <span class="toc-text">3.2 两种写法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-%E7%BB%84%E4%BB%B6%E9%87%8C%E4%BD%BF%E7%94%A8"><span class="toc-number">3.3.</span> <span class="toc-text">3.3 组件里使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-4-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%88%A0%E6%8E%89-mutations-%E8%BF%98%E8%83%BD%E6%97%B6%E9%97%B4%E6%97%85%E8%A1%8C"><span class="toc-number">3.4.</span> <span class="toc-text">3.4 为什么删掉 mutations 还能时间旅行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-5-%E5%AE%9E%E4%BE%8B-API%EF%BC%9A-patch-reset-subscribe-onAction"><span class="toc-number">3.5.</span> <span class="toc-text">3.5 实例 API：$patch &#x2F; $reset &#x2F; $subscribe &#x2F; $onAction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-6-%E5%8E%9F%E7%90%86%E9%80%9F%E8%A7%88"><span class="toc-number">3.6.</span> <span class="toc-text">3.6 原理速览</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E9%80%90%E9%A1%B9%E5%AF%B9%E6%AF%94"><span class="toc-number">4.</span> <span class="toc-text">四、逐项对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E5%AE%9E%E6%88%98%E6%8A%80%E5%B7%A7%E4%B8%8E%E6%98%93%E9%94%99%E7%82%B9"><span class="toc-number">5.</span> <span class="toc-text">五、实战技巧与易错点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E8%A7%A3%E6%9E%84%E4%B8%A2%E5%93%8D%E5%BA%94%E6%80%A7%EF%BC%9A%E5%BF%85%E9%A1%BB%E7%94%A8-storeToRefs"><span class="toc-number">5.1.</span> <span class="toc-text">5.1 解构丢响应性：必须用 storeToRefs</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-%E5%9C%A8%E7%BB%84%E4%BB%B6%E5%A4%96%E4%BD%BF%E7%94%A8-store"><span class="toc-number">5.2.</span> <span class="toc-text">5.2 在组件外使用 store</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-%E6%8C%81%E4%B9%85%E5%8C%96%EF%BC%9A%E4%B8%80%E4%B8%AA-20-%E8%A1%8C%E7%9A%84%E6%8F%92%E4%BB%B6"><span class="toc-number">5.3.</span> <span class="toc-text">5.3 持久化：一个 20 行的插件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-4-Setup-Store-%E7%9A%84%E7%A7%81%E6%9C%89%E7%8A%B6%E6%80%81%E4%B8%8E-reset"><span class="toc-number">5.4.</span> <span class="toc-text">5.4 Setup Store 的私有状态与 $reset</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-5-%E3%80%8C%E8%BD%BB%E9%87%8F%E6%9B%BF%E4%BB%A3%E5%93%81%E3%80%8D%EF%BC%9A%E6%A8%A1%E5%9D%97%E7%BA%A7-ref"><span class="toc-number">5.5.</span> <span class="toc-text">5.5 「轻量替代品」：模块级 ref</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81Vuex-%E2%86%92-Pinia-%E8%BF%81%E7%A7%BB%E6%8C%87%E5%8D%97"><span class="toc-number">6.</span> <span class="toc-text">六、Vuex → Pinia 迁移指南</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E9%AB%98%E9%A2%91%E9%9D%A2%E8%AF%95%E9%A2%98%E9%80%9F%E7%AD%94"><span class="toc-number">7.</span> <span class="toc-text">七、高频面试题速答</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E6%80%BB%E7%BB%93"><span class="toc-number">8.</span> <span class="toc-text">八、总结</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/ts-type-safe-request/" title="泛型与条件类型实战：写一个类型安全的请求封装">泛型与条件类型实战：写一个类型安全的请求封装</a><time datetime="2026-09-10T14:40:00.000Z" title="发表于 2026-09-10 22:40:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/pinia-vs-vuex/" title="Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store">Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store</a><time datetime="2026-09-10T13:30:00.000Z" title="发表于 2026-09-10 21:30:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/typescript-advanced-map/" title="TypeScript 进阶地图：从「会用」到「会设计类型」">TypeScript 进阶地图：从「会用」到「会设计类型」</a><time datetime="2026-09-10T09:00:00.000Z" title="发表于 2026-09-10 17:00:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/springboot-big-event-project/" title="Spring Boot 项目实战复盘：big-event 文章管理系统（JWT + Redis + MyBatis + MinIO）">Spring Boot 项目实战复盘：big-event 文章管理系统（JWT + Redis + MyBatis + MinIO）</a><time datetime="2026-09-10T08:30:00.000Z" title="发表于 2026-09-10 16:30:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/vite-webpack-migration/" title="Vite vs Webpack：迁移成本与收益评估——老项目值不值得换一次引擎">Vite vs Webpack：迁移成本与收益评估——老项目值不值得换一次引擎</a><time datetime="2026-09-10T08:00:00.000Z" title="发表于 2026-09-10 16:00:00">2026-09-10</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By StellaCode98</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.2</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.7.0</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><div class="js-pjax"></div><video id="site-video" src="/video/gufeng-snow.mp4" poster="/img/gufeng-girl.webp" autoplay loop muted playsinline disablepictureinpicture></video><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></div></body></html>

@@ -1,0 +1,331 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>TypeScript 进阶地图：从「会用」到「会设计类型」 | 眉眼如初、</title><meta name="author" content="StellaCode98"><meta name="copyright" content="StellaCode98"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="大多数人停在「会用」：会给变量贴标注、能看懂泛型、遇到搞不定的就 any。会和设计之间的分界线只有一个——类型在你的代码里是「描述」还是「约束」。这篇把进阶路线画成一张五层地图：收窄层（控制流分析、类型守卫、satisfies）、组合层（泛型作为类型级抽象、keyof 与映射类型）、推导层（条件类型 + infer 的模式匹配、模板字符串类型）、边界层（unknown 治理与运行时守卫）、设计层（">
+<meta property="og:type" content="article">
+<meta property="og:title" content="TypeScript 进阶地图：从「会用」到「会设计类型」">
+<meta property="og:url" content="https://stellacode98.github.io/2026/09/10/typescript-advanced-map/index.html">
+<meta property="og:site_name" content="眉眼如初、">
+<meta property="og:description" content="大多数人停在「会用」：会给变量贴标注、能看懂泛型、遇到搞不定的就 any。会和设计之间的分界线只有一个——类型在你的代码里是「描述」还是「约束」。这篇把进阶路线画成一张五层地图：收窄层（控制流分析、类型守卫、satisfies）、组合层（泛型作为类型级抽象、keyof 与映射类型）、推导层（条件类型 + infer 的模式匹配、模板字符串类型）、边界层（unknown 治理与运行时守卫）、设计层（">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://stellacode98.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-09-10T09:00:00.000Z">
+<meta property="article:modified_time" content="2026-09-10T05:07:44.824Z">
+<meta property="article:author" content="StellaCode98">
+<meta property="article:tag" content="typescript">
+<meta property="article:tag" content="泛型">
+<meta property="article:tag" content="类型系统">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://stellacode98.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "TypeScript 进阶地图：从「会用」到「会设计类型」",
+  "url": "https://stellacode98.github.io/2026/09/10/typescript-advanced-map/",
+  "image": "https://stellacode98.github.io/img/avatar.jpg",
+  "datePublished": "2026-09-10T09:00:00.000Z",
+  "dateModified": "2026-09-10T05:07:44.824Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "StellaCode98",
+      "url": "https://stellacode98.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.ico"><link rel="canonical" href="https://stellacode98.github.io/2026/09/10/typescript-advanced-map/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'TypeScript 进阶地图：从「会用」到「会设计类型」',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/bg-video.css"><link rel="stylesheet" href="/css/gufeng-soft.css"><meta name="generator" content="Hexo 8.1.2"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">27</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">75</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">24</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/gufeng-girl.webp);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">眉眼如初、</span></a><a class="nav-page-title" href="/"><span class="site-name">TypeScript 进阶地图：从「会用」到「会设计类型」</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">TypeScript 进阶地图：从「会用」到「会设计类型」</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-10T09:00:00.000Z" title="发表于 2026-09-10 17:00:00">2026-09-10</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-10T05:07:44.824Z" title="更新于 2026-09-10 13:07:44">2026-09-10</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%89%8D%E7%AB%AF%E5%9F%BA%E7%A1%80/">前端基础</a><i class="fas fa-angle-right post-meta-separator"></i><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%89%8D%E7%AB%AF%E5%9F%BA%E7%A1%80/typescript/">typescript</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p>先对齐一个观察：团队里 TS 写了两年的人，多数停在「会用」——变量有标注、接口有 interface、组件 props 有类型，遇到搞不定的场景一个 <code>any</code> 逃之夭夭。这不是姿势问题，是<strong>没有完成一次视角切换</strong>：</p>
+<blockquote>
+<p><strong>会用 TS 的人把类型当「描述」：给已经写好的代码贴标签。</strong><br><strong>会设计类型的人把类型当「约束」：先想清楚问题的合法状态空间，让非法状态在类型层面就无法表示。</strong></p>
+</blockquote>
+<p>这篇就把从前者到后者的路径画成一张地图。结论先放这：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs text">「会用」→「会设计」不是学更多语法，而是换一个问题：<br>  从「这个值是什么类型」 换成 「这个类型允许哪些值存在」<br></code></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<h2 id="一、分界线长什么样：一个所有前端都写过的例子"><a href="#一、分界线长什么样：一个所有前端都写过的例子" class="headerlink" title="一、分界线长什么样：一个所有前端都写过的例子"></a>一、分界线长什么样：一个所有前端都写过的例子</h2><p>请求状态。三个字段的写法人人写过：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-comment">// 「会用」版：三个独立字段</span><br><span class="hljs-keyword">interface</span> <span class="hljs-title class_">RequestState</span>&lt;T&gt; &#123;<br>  <span class="hljs-attr">data</span>: T | <span class="hljs-literal">null</span><br>  <span class="hljs-attr">error</span>: <span class="hljs-title class_">Error</span> | <span class="hljs-literal">null</span><br>  <span class="hljs-attr">loading</span>: <span class="hljs-built_in">boolean</span><br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>看起来无害，算一下状态空间：<code>data</code> 两种 × <code>error</code> 两种 × <code>loading</code> 两种 &#x3D; <strong>8 种组合，其中 4 种是非法的</strong>——<code>loading: true</code> 的同时还挂着 <code>error</code>？<code>data</code> 和 <code>error</code> 同时有值？类型系统全都放行，于是每个消费组件都得自己写防御：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">if</span> (state.<span class="hljs-property">loading</span> &amp;&amp; !state.<span class="hljs-property">error</span> &amp;&amp; state.<span class="hljs-property">data</span> === <span class="hljs-literal">null</span>) &#123; ... &#125; <span class="hljs-comment">// 防御性条件越堆越长</span><br></code></pre></td></tr></table></figure>
+
+<p>「会设计」的写法是把状态空间直接建进类型：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-comment">// 「会设计」版：判别联合（discriminated union）</span><br><span class="hljs-keyword">type</span> <span class="hljs-title class_">RequestState</span>&lt;T&gt; =<br>  | &#123; <span class="hljs-attr">status</span>: <span class="hljs-string">&#x27;idle&#x27;</span> &#125;<br>  | &#123; <span class="hljs-attr">status</span>: <span class="hljs-string">&#x27;loading&#x27;</span> &#125;<br>  | &#123; <span class="hljs-attr">status</span>: <span class="hljs-string">&#x27;success&#x27;</span>; <span class="hljs-attr">data</span>: T &#125;<br>  | &#123; <span class="hljs-attr">status</span>: <span class="hljs-string">&#x27;error&#x27;</span>; <span class="hljs-attr">error</span>: <span class="hljs-title class_">Error</span> &#125;<br></code></pre></td></tr></table></figure>
+
+<p>恰好 4 个成员、每个成员携带且仅携带自己需要的字段，非法组合<strong>不是被运行时判断挡住，而是根本无法构造</strong>。这就是那句名言的意思——<em>make illegal states unrepresentable</em>。</p>
+<p>记住这个例子，下面每往上一层，都是在给这类设计提供工具。</p>
+<h2 id="二、地图总览"><a href="#二、地图总览" class="headerlink" title="二、地图总览"></a>二、地图总览</h2><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs text">┌─────────────────────────────────────────────────────────┐<br>│ ⑤ 设计层   判别联合 / Branded Types / 类型驱动开发        │ ← 让非法状态不可表示<br>│ ④ 边界层   unknown 治理 / 运行时守卫 / 声明合并           │ ← 给系统砌墙<br>│ ③ 推导层   条件类型 / infer / 模板字符串类型              │ ← 类型级模式匹配<br>│ ② 组合层   泛型抽象 / keyof / 映射类型                   │ ← 类型级函数<br>│ ① 收窄层   控制流分析 / 类型守卫 / satisfies / as const  │ ← 让推导跑起来<br>└─────────────────────────────────────────────────────────┘<br></code></pre></td></tr></table></figure>
+
+<p>五层的关系是<strong>递进依赖</strong>：不掌握收窄，判别联合的 switch 写不完整；不懂 keyof，泛型约束就没有表达力；不理解条件类型，Omit 这种日常工具类型永远是个黑盒。下面逐层展开。</p>
+<h2 id="三、①-收窄层：把类型推导当成队友，而不是对手"><a href="#三、①-收窄层：把类型推导当成队友，而不是对手" class="headerlink" title="三、① 收窄层：把类型推导当成队友，而不是对手"></a>三、① 收窄层：把类型推导当成队友，而不是对手</h2><p>这一层的核心认知：<strong>TS 的类型检查不是「逐行标注」，而是跟着控制流走的推导系统</strong>。你写的每个 <code>if</code>、<code>return</code>、<code>??</code> 都在给编译器喂信息。</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">function</span> <span class="hljs-title function_">format</span>(<span class="hljs-params"><span class="hljs-attr">value</span>: <span class="hljs-built_in">string</span> | <span class="hljs-built_in">number</span></span>) &#123;<br>  <span class="hljs-keyword">if</span> (<span class="hljs-keyword">typeof</span> value === <span class="hljs-string">&#x27;string&#x27;</span>) &#123;<br>    <span class="hljs-keyword">return</span> value.<span class="hljs-title function_">trim</span>()          <span class="hljs-comment">// 这里已经被收窄为 string</span><br>  &#125;<br>  <span class="hljs-keyword">return</span> value.<span class="hljs-title function_">toFixed</span>(<span class="hljs-number">2</span>)        <span class="hljs-comment">// 剩余分支自动收窄为 number</span><br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>进阶者要掌握的四个抓手：</p>
+<p><strong>1. 判别联合 + <code>never</code> 穷尽检查</strong>。第一节的状态类型，消费端这样写：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">function</span> <span class="hljs-title function_">render</span>(<span class="hljs-params"><span class="hljs-attr">state</span>: <span class="hljs-title class_">RequestState</span>&lt;<span class="hljs-title class_">User</span>[]&gt;</span>) &#123;<br>  <span class="hljs-keyword">switch</span> (state.<span class="hljs-property">status</span>) &#123;<br>    <span class="hljs-keyword">case</span> <span class="hljs-string">&#x27;idle&#x27;</span>:    <span class="hljs-keyword">return</span> <span class="hljs-title function_">placeholder</span>()<br>    <span class="hljs-keyword">case</span> <span class="hljs-string">&#x27;loading&#x27;</span>: <span class="hljs-keyword">return</span> <span class="hljs-title function_">spinner</span>()<br>    <span class="hljs-keyword">case</span> <span class="hljs-string">&#x27;success&#x27;</span>: <span class="hljs-keyword">return</span> <span class="hljs-title function_">list</span>(state.<span class="hljs-property">data</span>)      <span class="hljs-comment">// 此分支里 data 一定存在</span><br>    <span class="hljs-keyword">case</span> <span class="hljs-string">&#x27;error&#x27;</span>:   <span class="hljs-keyword">return</span> <span class="hljs-title function_">errorBox</span>(state.<span class="hljs-property">error</span>)<br>    <span class="hljs-attr">default</span>: &#123;<br>      <span class="hljs-keyword">const</span> <span class="hljs-attr">_exhaustive</span>: <span class="hljs-built_in">never</span> = state           <span class="hljs-comment">// 漏写任何分支，这一行编译报错</span><br>      <span class="hljs-keyword">return</span> _exhaustive<br>    &#125;<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><code>never</code> 是空集——只有所有可能都被前面分支吃掉，<code>state</code> 才可能被收窄成 <code>never</code>。这个模式的价值在于：<strong>将来给联合加一个新状态，所有消费处的漏改会在编译期集体爆炸</strong>，而不是上线后白屏一处。</p>
+<p><strong>2. 自定义守卫：<code>x is T</code></strong>。当收窄逻辑复杂到编译器推不出来，就把判断封装成语义化的守卫函数：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">function</span> <span class="hljs-title function_">isApiError</span>(<span class="hljs-params"><span class="hljs-attr">x</span>: <span class="hljs-built_in">unknown</span></span>): x is &#123; <span class="hljs-attr">code</span>: <span class="hljs-built_in">number</span>; <span class="hljs-attr">message</span>: <span class="hljs-built_in">string</span> &#125; &#123;<br>  <span class="hljs-keyword">return</span> <span class="hljs-keyword">typeof</span> x === <span class="hljs-string">&#x27;object&#x27;</span> &amp;&amp; x !== <span class="hljs-literal">null</span><br>      &amp;&amp; <span class="hljs-string">&#x27;code&#x27;</span> <span class="hljs-keyword">in</span> x &amp;&amp; <span class="hljs-string">&#x27;message&#x27;</span> <span class="hljs-keyword">in</span> x<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><strong>3. <code>satisfies</code>：校验但不拓宽</strong>（TS 4.9+）。标注和推导之间的第三条路：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">const</span> theme = &#123;<br>  <span class="hljs-attr">dark</span>:  &#123; <span class="hljs-attr">bg</span>: <span class="hljs-string">&#x27;#111&#x27;</span>, <span class="hljs-attr">fg</span>: <span class="hljs-string">&#x27;#eee&#x27;</span> &#125;,<br>  <span class="hljs-attr">light</span>: &#123; <span class="hljs-attr">bg</span>: <span class="hljs-string">&#x27;#eee&#x27;</span>, <span class="hljs-attr">fg</span>: <span class="hljs-string">&#x27;#111&#x27;</span> &#125;,<br>&#125; <span class="hljs-keyword">satisfies</span> <span class="hljs-title class_">Record</span>&lt;<span class="hljs-built_in">string</span>, &#123; <span class="hljs-attr">bg</span>: <span class="hljs-built_in">string</span>; <span class="hljs-attr">fg</span>: <span class="hljs-built_in">string</span> &#125;&gt;<br><br>theme.<span class="hljs-property">dark</span>.<span class="hljs-property">bg</span>   <span class="hljs-comment">// ✅ 若写成「: Record&lt;...&gt;」标注，这里会因键被拓宽而报错</span><br></code></pre></td></tr></table></figure>
+
+<p><strong>4. <code>as const</code></strong>：把推导从「宽松的容器」切换到「精确的字面量」，是后面模板字符串类型和 branded 类型的前置条件。</p>
+<h2 id="四、②-组合层：泛型不是「类型的参数」，是类型级的函数"><a href="#四、②-组合层：泛型不是「类型的参数」，是类型级的函数" class="headerlink" title="四、② 组合层：泛型不是「类型的参数」，是类型级的函数"></a>四、② 组合层：泛型不是「类型的参数」，是类型级的函数</h2><p>初学者对泛型的理解停在「调用时要传一个类型进去」，这是把它当语法糖。「会设计」的理解是：<strong>泛型是抽象在类型世界的投影——函数值是值的抽象，泛型是类型的抽象</strong>。</p>
+<p>分水岭例子，一行看懂 <code>keyof</code> + 索引访问 + 泛型约束的组合拳：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">function</span> pick&lt;T, K <span class="hljs-keyword">extends</span> keyof T&gt;(<span class="hljs-attr">obj</span>: T, <span class="hljs-attr">key</span>: K): T[K] &#123;<br>  <span class="hljs-keyword">return</span> obj[key]<br>&#125;<br><br><span class="hljs-keyword">const</span> u = &#123; <span class="hljs-attr">id</span>: <span class="hljs-number">1</span>, <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;kxl&#x27;</span>, <span class="hljs-attr">vip</span>: <span class="hljs-literal">true</span> &#125;<br><span class="hljs-title function_">pick</span>(u, <span class="hljs-string">&#x27;name&#x27;</span>)   <span class="hljs-comment">// 类型是 string，key 打错字直接编译报错</span><br></code></pre></td></tr></table></figure>
+
+<p><code>K extends keyof T</code> 读作「K 只能是 T 的键」，<code>T[K]</code> 读作「按 K 查表取值」。三个零件拼起来，就实现了「属性名的类型安全」——这在 JavaScript 里只能靠运行时报错兜底。</p>
+<p>这一层要建立的肌肉：</p>
+<ul>
+<li><strong><code>keyof</code> &#x2F; <code>T[K]</code> &#x2F; <code>typeof x</code></strong>：类型的查表三件套。<code>typeof config</code> 从值反查类型，让配置对象和类型永远不漂移；</li>
+<li><strong>映射类型</strong>：<code>{ [K in keyof T]: ... }</code> 是对类型的 for 循环，所有 <code>Partial</code>、<code>Readonly</code> 的本质；</li>
+<li><strong>泛型参数能省则省</strong>：能被推导的就不要让调用者手传。<code>pick(u, &#39;name&#39;)</code> 不需要写 <code>pick&lt;typeof u, &#39;name&#39;&gt;(...)</code>——<strong>签名设计的目标是让调用方不可能传错，而不是让调用方传一堆</strong>。</li>
+</ul>
+<h2 id="五、③-推导层：条件类型-infer，类型级别的模式匹配"><a href="#五、③-推导层：条件类型-infer，类型级别的模式匹配" class="headerlink" title="五、③ 推导层：条件类型 + infer，类型级别的模式匹配"></a>五、③ 推导层：条件类型 + <code>infer</code>，类型级别的模式匹配</h2><p>这一层是「会设计」的分水岭，也是「类型体操」的重灾区。核心就一句话：</p>
+<blockquote>
+<p><strong>条件类型是类型层面的三元表达式，<code>infer</code> 是它在模式里声明的「捕获变量」。</strong></p>
+</blockquote>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">type</span> <span class="hljs-title class_">UnwrapPromise</span>&lt;T&gt; = T <span class="hljs-keyword">extends</span> <span class="hljs-title class_">Promise</span>&lt;infer U&gt; ? U : T<br><span class="hljs-keyword">type</span> <span class="hljs-title class_">Awaited1</span> = <span class="hljs-title class_">UnwrapPromise</span>&lt;<span class="hljs-title class_">Promise</span>&lt;<span class="hljs-built_in">number</span>&gt;&gt;   <span class="hljs-comment">// number</span><br><span class="hljs-keyword">type</span> <span class="hljs-title class_">ElementOf</span>&lt;T&gt; = T <span class="hljs-title function_">extends</span> (infer E)[] ? E : <span class="hljs-built_in">never</span><br><span class="hljs-keyword">type</span> <span class="hljs-title class_">Item</span> = <span class="hljs-title class_">ElementOf</span>&lt;<span class="hljs-built_in">string</span>[]&gt;                  <span class="hljs-comment">// string</span><br></code></pre></td></tr></table></figure>
+
+<p>读法：<code>T extends Promise&lt;infer U&gt;</code> 不是在问「T 是不是 Promise」——<code>infer U</code> 相当于在匹配的<strong>结构里挖一个洞</strong>，把洞里的类型绑到 U 上。这是 <code>ReturnType</code>、<code>Parameters</code> 全家的原理。</p>
+<p>理解了这两个零件，<strong>标准库的工具类型就全透明了</strong>，每个都不超过五行：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">type</span> <span class="hljs-title class_">MyPartial</span>&lt;T&gt;  = &#123; [K <span class="hljs-keyword">in</span> keyof T]?: T[K] &#125;<br><span class="hljs-keyword">type</span> <span class="hljs-title class_">MyPick</span>&lt;T, K <span class="hljs-keyword">extends</span> keyof T&gt; = &#123; [P <span class="hljs-keyword">in</span> K]: T[P] &#125;<br><span class="hljs-keyword">type</span> <span class="hljs-title class_">MyReturnType</span>&lt;T&gt; = T <span class="hljs-title function_">extends</span> (...<span class="hljs-attr">args</span>: <span class="hljs-built_in">never</span>[]) =&gt; infer R ? R : <span class="hljs-built_in">never</span><br></code></pre></td></tr></table></figure>
+
+<p>再进半步是<strong>键重映射 + 模板字符串类型</strong>（TS 4.1+），可以生成一族新键名：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">type</span> <span class="hljs-title class_">Getters</span>&lt;T&gt; = &#123;<br>  [K <span class="hljs-keyword">in</span> keyof T <span class="hljs-keyword">as</span> <span class="hljs-string">`get<span class="hljs-subst">$&#123;Capitalize&lt;K &amp; <span class="hljs-built_in">string</span>&gt;&#125;</span>`</span>]: <span class="hljs-function">() =&gt;</span> T[K]<br>&#125;<br><br><span class="hljs-keyword">interface</span> <span class="hljs-title class_">Point</span> &#123; <span class="hljs-attr">x</span>: <span class="hljs-built_in">number</span>; <span class="hljs-attr">y</span>: <span class="hljs-built_in">number</span> &#125;<br><span class="hljs-keyword">type</span> <span class="hljs-title class_">PointGetters</span> = <span class="hljs-title class_">Getters</span>&lt;<span class="hljs-title class_">Point</span>&gt;<br><span class="hljs-comment">// &#123; getX: () =&gt; number; getY: () =&gt; number &#125;</span><br></code></pre></td></tr></table></figure>
+
+<p>这一层还有个必踩的坑要提前知道：<strong>裸类型参数遇到联合会分发</strong>。<code>ElementOf&lt;string[] | number[]&gt;</code> 得到的是 <code>string | number</code>（逐成员求值再合并），不是 <code>string[] | number[]</code> 的元素。想关掉分发，用方括号包一层 <code>[T] extends [never[]] ? ... : ...</code>。很多「条件类型行为诡异」的 bug，拆开看都是分发在暗中生效。</p>
+<h2 id="六、④-边界层：系统里最危险的地方，恰好是-TS-管不到的地方"><a href="#六、④-边界层：系统里最危险的地方，恰好是-TS-管不到的地方" class="headerlink" title="六、④ 边界层：系统里最危险的地方，恰好是 TS 管不到的地方"></a>六、④ 边界层：系统里最危险的地方，恰好是 TS 管不到的地方</h2><p>类型只在编译期存在，而系统的边缘——网络响应、<code>JSON.parse</code>、<code>localStorage</code>、第三方 JS——<strong>天然没有类型</strong>。这里的抉择区分了三种人：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs text">any     = 双向放弃：既不检查我给它，也不检查它给我<br>unknown = 「我知道这里没类型，但我拒绝假装它有」→ 强制收窄后才能用<br>never   = 空集，穷尽检查的哨兵<br></code></pre></td></tr></table></figure>
+
+<p>「会设计」的边界一定是 <code>unknown</code> + 运行时守卫的组合：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> request&lt;T&gt;(<br>  <span class="hljs-attr">url</span>: <span class="hljs-built_in">string</span>,<br>  <span class="hljs-attr">guard</span>: <span class="hljs-function">(<span class="hljs-params"><span class="hljs-attr">x</span>: <span class="hljs-built_in">unknown</span></span>) =&gt;</span> x is T,          <span class="hljs-comment">// 类型安全的最后一公里 = 一个守卫函数</span><br>): <span class="hljs-title class_">Promise</span>&lt;T&gt; &#123;<br>  <span class="hljs-keyword">const</span> <span class="hljs-attr">raw</span>: <span class="hljs-built_in">unknown</span> = <span class="hljs-keyword">await</span> <span class="hljs-title function_">fetch</span>(url).<span class="hljs-title function_">then</span>(<span class="hljs-function"><span class="hljs-params">r</span> =&gt;</span> r.<span class="hljs-title function_">json</span>())<br>  <span class="hljs-keyword">if</span> (!<span class="hljs-title function_">guard</span>(raw)) <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Error</span>(<span class="hljs-string">`响应结构不符: <span class="hljs-subst">$&#123;url&#125;</span>`</span>)<br>  <span class="hljs-keyword">return</span> raw<br>&#125;<br><br><span class="hljs-keyword">const</span> isUser = (<span class="hljs-attr">x</span>: <span class="hljs-built_in">unknown</span>): x is <span class="hljs-title class_">User</span> =&gt;<br>  <span class="hljs-keyword">typeof</span> x === <span class="hljs-string">&#x27;object&#x27;</span> &amp;&amp; x !== <span class="hljs-literal">null</span> &amp;&amp; <span class="hljs-string">&#x27;id&#x27;</span> <span class="hljs-keyword">in</span> x &amp;&amp; <span class="hljs-string">&#x27;name&#x27;</span> <span class="hljs-keyword">in</span> x<br><br><span class="hljs-keyword">const</span> user = <span class="hljs-keyword">await</span> <span class="hljs-title function_">request</span>(<span class="hljs-string">&#x27;/api/user&#x27;</span>, isUser)   <span class="hljs-comment">// user: User，且经过验证</span><br></code></pre></td></tr></table></figure>
+
+<p>注意这个设计的妙处：<strong>守卫函数是唯一同时被「运行时」和「类型系统」信任的凭证</strong>——运行时执行它，类型系统认它的返回值签名。后端改了字段，错误在守卫处当场爆炸，而不是渲染层读到 <code>undefined</code> 才炸。</p>
+<p>配套的两个习惯：<code>catch (e)</code> 的 <code>e</code> 按 <code>unknown</code> 处理（<code>useUnknownInCatchVariables</code>）；给无类型的第三方包补 <code>.d.ts</code>，用模块扩充（<code>declare module</code>）给已声明类型打补丁。</p>
+<h2 id="七、⑤-设计层：把「业务不变量」编码进类型"><a href="#七、⑤-设计层：把「业务不变量」编码进类型" class="headerlink" title="七、⑤ 设计层：把「业务不变量」编码进类型"></a>七、⑤ 设计层：把「业务不变量」编码进类型</h2><p>到这一层，类型不再是代码的附属品，而是<strong>领域建模工具</strong>。两个代表武器：</p>
+<p><strong>1. 判别联合建模状态机</strong>。第一节的 <code>RequestState</code> 推广开：向导表单的步骤、支付单的生命周期、组件的生命周期，凡是「状态 + 各状态的专属负载」都该是一个联合。写代码前先画状态转移表，再把表翻译成类型——这就是<strong>类型驱动开发</strong>：类型签名先于实现存在，它是给自己和同事的设计文档。</p>
+<p><strong>2. Branded Types：给同构类型发身份证</strong>。TS 是结构化类型系统——<code>string</code> 和 <code>string</code> 永远兼容，于是用户 ID 和订单 ID 可以互相赋值，编译器毫无意见：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">declare</span> <span class="hljs-keyword">const</span> <span class="hljs-attr">brand</span>: unique <span class="hljs-built_in">symbol</span><br><span class="hljs-keyword">type</span> <span class="hljs-title class_">UserId</span>  = <span class="hljs-built_in">string</span> &amp; &#123; <span class="hljs-keyword">readonly</span> [brand]: <span class="hljs-string">&#x27;UserId&#x27;</span> &#125;<br><span class="hljs-keyword">type</span> <span class="hljs-title class_">OrderId</span> = <span class="hljs-built_in">string</span> &amp; &#123; <span class="hljs-keyword">readonly</span> [brand]: <span class="hljs-string">&#x27;OrderId&#x27;</span> &#125;<br><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">getUser</span>(<span class="hljs-params"><span class="hljs-attr">id</span>: <span class="hljs-title class_">UserId</span></span>) &#123; ... &#125;<br><br><span class="hljs-title function_">getUser</span>(orderId)   <span class="hljs-comment">// ❌ 编译报错：结构相同也不行</span><br><span class="hljs-title function_">getUser</span>(<span class="hljs-string">&#x27;123&#x27;</span>)     <span class="hljs-comment">// ❌ 裸字符串也不行</span><br></code></pre></td></tr></table></figure>
+
+<p>唯一合法的进入方式是走「铸造」出口，把校验收拢在一处：</p>
+<figure class="highlight ts"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs ts"><span class="hljs-keyword">function</span> <span class="hljs-title function_">toUserId</span>(<span class="hljs-params"><span class="hljs-attr">raw</span>: <span class="hljs-built_in">string</span></span>): <span class="hljs-title class_">UserId</span> &#123;<br>  <span class="hljs-keyword">if</span> (!<span class="hljs-regexp">/^\d+$/</span>.<span class="hljs-title function_">test</span>(raw)) <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Error</span>(<span class="hljs-string">&#x27;非法的用户 ID&#x27;</span>)<br>  <span class="hljs-keyword">return</span> raw <span class="hljs-keyword">as</span> <span class="hljs-title class_">UserId</span>            <span class="hljs-comment">// 系统里唯一一个 as</span><br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>从此「传错 ID」这类事故从运行时日志变成编辑器红线。经验法则：<strong>同构类型一旦跨模块流动、且有自己的校验规则，就值得 brand 一下</strong>——ID、毫秒时间戳、已消毒的 HTML、经纬度，都是典型候选。</p>
+<h2 id="八、练习路径，和「该在哪停」"><a href="#八、练习路径，和「该在哪停」" class="headerlink" title="八、练习路径，和「该在哪停」"></a>八、练习路径，和「该在哪停」</h2><p>每一层配一个刻意练习方式：</p>
+<table>
+<thead>
+<tr>
+<th>层</th>
+<th>解锁能力</th>
+<th>练习方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>① 收窄</td>
+<td>读懂并信任推导、穷尽检查</td>
+<td>把旧代码里的防御性 if 换成判别联合，删掉 null 检查</td>
+</tr>
+<tr>
+<td>② 组合</td>
+<td>写出类型安全的工具函数</td>
+<td>手写 pick&#x2F;omit&#x2F;restrictTo，不许查资料</td>
+</tr>
+<tr>
+<td>③ 推导</td>
+<td>读懂一切工具类型源码</td>
+<td><strong>通读 <code>lib.es5.d.ts</code></strong>——最被低估的教材，全部核心工具类型都在里面，每个不超十行</td>
+</tr>
+<tr>
+<td>④ 边界</td>
+<td>any 的持续治理</td>
+<td>给项目里每个 <code>any</code> 分类：能收窄的收窄、真没型的写守卫、第三方的补声明</td>
+</tr>
+<tr>
+<td>⑤ 设计</td>
+<td>用类型承载业务规则</td>
+<td>找一个真实的「传错参数」事故，用判别联合或 brand 重构到它不可能再犯</td>
+</tr>
+</tbody></table>
+<p>最后是「度」的问题——这一层往上就是类型体操的深渊（四五行 <code>infer</code> 嵌套、递归类型展开成 AST 变换），要不要走下去？我的判断标准只有一条：</p>
+<blockquote>
+<p><strong>类型代码没有运行时开销，但有认知开销。一个高级类型值不值得写，看它能不能让调用方「不看实现就知道自己用错了」——做不到这点的类型体操，是在用团队的未来给自己的智商付费。</strong></p>
+</blockquote>
+<p>团队项目里，⑤ 层的判别联合和 branded 值得推行，③ 层的炫技推导尽量封在底层库里并由注释护航。</p>
+<h2 id="结语"><a href="#结语" class="headerlink" title="结语"></a>结语</h2><p>回到开头的分界线。五层地图爬完，变化的不是语法量，是动笔顺序：</p>
+<blockquote>
+<p><strong>「会用」是写完代码再补类型——类型是给编译器的交代；「会设计」是先画状态空间再写实现——类型是给问题的建模。前者让编译通过，后者让错误无处容身。</strong></p>
+</blockquote>
+<p>这篇是地图，后面的坑位已经排好：泛型与条件类型的完整实战（一个类型安全的请求封装）、tsconfig 关键配置逐项讲清、存量项目的 any 治理。异步相关的类型边界（<code>Promise&lt;T&gt;</code> 的推导与 <code>await</code> 的 unwrap）可以配合<a href="/2026/09/09/javascript-promise/">《JavaScript Promise》</a>食用。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io">StellaCode98</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io/2026/09/10/typescript-advanced-map/">https://stellacode98.github.io/2026/09/10/typescript-advanced-map/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://stellacode98.github.io" target="_blank">眉眼如初、</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/typescript/">typescript</a><a class="post-meta__tags" href="/tags/%E6%B3%9B%E5%9E%8B/">泛型</a><a class="post-meta__tags" href="/tags/%E7%B1%BB%E5%9E%8B%E7%B3%BB%E7%BB%9F/">类型系统</a></div><div class="post-share"><div class="social-share" data-image="/img/avatar.jpg" data-sites="wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/09/10/pinia-vs-vuex/" title="Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store</div></div><div class="info-2"><div class="info-item-1">这两个库解决的问题只有一个：多个组件共享同一份状态。但它们给出的答案，恰好对应了 Vue2 和 Vue3 两代技术栈的世界观——Vuex 是「中心化的单一仓库 + 单向数据流」，Pinia 是「一组全局的组合式函数」。  先说结论：Vuex 强制把「改状态」拆成 mutations（同步）和 actions（异步），是为了在 Options API 时代让 DevTools 能可靠追踪每一次变更；Vue3 的响应式系统本身就能观测到任何途径的修改，这层强制拆分失去了意义，于是 Pinia 把它删掉了，同时用「天然按 id 拆分的扁平 store」取代了 Vuex 的嵌套 modules。新项目（Vue3）直接用 Pinia，没有第二个选项；Vue2 老项目继续 Vuex，不必强行迁移。    一、为什么需要状态管理组件化把页面拆成了树，但状态经常不属于任何一棵子树——登录态、用户信息、购物车、主题配置，都是「很多组件都要读写」的东西。不借助任何方案时，只有两条路： 1. props 逐层透传（props drilling） 123456&lt;!-- App.vue 知道 use...</div></div></div></a><a class="pagination-related" href="/2026/09/10/springboot-big-event-project/" title="Spring Boot 项目实战复盘：big-event 文章管理系统（JWT + Redis + MyBatis + MinIO）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">Spring Boot 项目实战复盘：big-event 文章管理系统（JWT + Redis + MyBatis + MinIO）</div></div><div class="info-2"><div class="info-item-1">学 Spring Boot 的时候，知识点是一个一个学的：依赖注入、拦截器、注解校验、MyBatis……每个都能看懂，但始终没回答一个问题——它们在真实项目里是怎么协同工作的。big-event 是我学完 Java 后按课程完成的第一个完整后端项目，一个文章管理系统，从建表到接口全部跑通。  单个知识点和完整项目之间的差距，在于「横切关注点」怎么组织：认证放在拦截器里统一做，而不是每个接口手写一遍；当前用户身份用 ThreadLocal 传递，而不是在参数里层层透传；异常和响应用全局处理器统一格式，而不是各接口自理。这个项目把这四件事各做了一遍，本文就以「一次请求的生命周期」为主线来复盘。  123456789101112                    big-event 文章管理系统┌─────────────────────────────────────────────────────┐│  用户模块      分类模块      文章模块      文件上传     ││  注册/登录     CRUD         CRUD+分页    本地/MinIO   ...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/09/09/element-plus-table-component/" title="封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟</div></div><div class="info-2"><div class="info-item-1">写过中后台的同学都有体感：列表页的模板代码一半是 &lt;el-table-column&gt; 的复制粘贴，另一半是 &lt;el-pagination&gt; 的事件处理。一个页面十几列，loading、空状态、序号列、多选框、操作列插槽……每个页面把这些再写一遍，改一个列宽要去模板里翻半天。 之前项目里沉淀了一个基于 Element Plus 的通用表格组件，最近又在新项目里用一个「后端下发表头」的动态列场景喂了它一波，正好把完整代码和设计思路整理出来。组件不大，两百多行，但里面有几个值得抠的设计点：配置驱动、插槽透传、单选模拟、跨页多选、分页状态归属。   一、API 设计：三个 prop、三个事件、一个 expose先看组件对外的契约，封装一个组件最重要的就是先把 API 定稳： 12345678910111213props  data     : any[]          行数据  header   : HeaderItem[]   列配置（JSON 声明，见下表）  config   : TableConfig    表格行为配置（loading/total/多...</div></div></div></a><a class="pagination-related" href="/2026/09/10/ts-type-safe-request/" title="泛型与条件类型实战：写一个类型安全的请求封装"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-10</div><div class="info-item-2">泛型与条件类型实战：写一个类型安全的请求封装</div></div><div class="info-2"><div class="info-item-1">这篇文章只做一件事：把一个 any 满天飞的请求封装，一步步改造成调用处零手写类型、零类型断言的类型安全封装。所有「类型体操」都不为炫技——每一步都对应一个真实的工程痛点。  先说结论：类型安全的请求封装，核心思路不是「在调用处标注类型」，而是让 API 定义表成为唯一数据源——url、method、参数类型、返回类型都写在一张表里，然后用 typeof + keyof + 索引访问取到某个 API 的定义，用条件类型 + infer 从定义里把参数和返回值「解构」出来，用条件类型 + 可变元组表达「有 params 必传、没有就不能传」。调用处一个尖括号都不写，类型全部自动流动，而且写错参数名、传错类型、忘记写返回类型，都在编译期报错。    一、痛点：一个典型的 any 封装几乎所有项目都有这个文件： 12345678910// utils/request.ts —— 祖传版本import axios from &#x27;axios&#x27;export function get&lt;T = any&gt;(url: string, params?: any): Pro...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">StellaCode98</div><div class="author-info-description">记录前端学习与开发中的思考</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">27</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">75</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">24</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/StellaCode98"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/StellaCode98" target="_blank" title="GitHub"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">欢迎来到我的小站，这里记录我的学习笔记与实践心得</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E5%88%86%E7%95%8C%E7%BA%BF%E9%95%BF%E4%BB%80%E4%B9%88%E6%A0%B7%EF%BC%9A%E4%B8%80%E4%B8%AA%E6%89%80%E6%9C%89%E5%89%8D%E7%AB%AF%E9%83%BD%E5%86%99%E8%BF%87%E7%9A%84%E4%BE%8B%E5%AD%90"><span class="toc-number">1.</span> <span class="toc-text">一、分界线长什么样：一个所有前端都写过的例子</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E5%9C%B0%E5%9B%BE%E6%80%BB%E8%A7%88"><span class="toc-number">2.</span> <span class="toc-text">二、地图总览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E2%91%A0-%E6%94%B6%E7%AA%84%E5%B1%82%EF%BC%9A%E6%8A%8A%E7%B1%BB%E5%9E%8B%E6%8E%A8%E5%AF%BC%E5%BD%93%E6%88%90%E9%98%9F%E5%8F%8B%EF%BC%8C%E8%80%8C%E4%B8%8D%E6%98%AF%E5%AF%B9%E6%89%8B"><span class="toc-number">3.</span> <span class="toc-text">三、① 收窄层：把类型推导当成队友，而不是对手</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E2%91%A1-%E7%BB%84%E5%90%88%E5%B1%82%EF%BC%9A%E6%B3%9B%E5%9E%8B%E4%B8%8D%E6%98%AF%E3%80%8C%E7%B1%BB%E5%9E%8B%E7%9A%84%E5%8F%82%E6%95%B0%E3%80%8D%EF%BC%8C%E6%98%AF%E7%B1%BB%E5%9E%8B%E7%BA%A7%E7%9A%84%E5%87%BD%E6%95%B0"><span class="toc-number">4.</span> <span class="toc-text">四、② 组合层：泛型不是「类型的参数」，是类型级的函数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E2%91%A2-%E6%8E%A8%E5%AF%BC%E5%B1%82%EF%BC%9A%E6%9D%A1%E4%BB%B6%E7%B1%BB%E5%9E%8B-infer%EF%BC%8C%E7%B1%BB%E5%9E%8B%E7%BA%A7%E5%88%AB%E7%9A%84%E6%A8%A1%E5%BC%8F%E5%8C%B9%E9%85%8D"><span class="toc-number">5.</span> <span class="toc-text">五、③ 推导层：条件类型 + infer，类型级别的模式匹配</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E2%91%A3-%E8%BE%B9%E7%95%8C%E5%B1%82%EF%BC%9A%E7%B3%BB%E7%BB%9F%E9%87%8C%E6%9C%80%E5%8D%B1%E9%99%A9%E7%9A%84%E5%9C%B0%E6%96%B9%EF%BC%8C%E6%81%B0%E5%A5%BD%E6%98%AF-TS-%E7%AE%A1%E4%B8%8D%E5%88%B0%E7%9A%84%E5%9C%B0%E6%96%B9"><span class="toc-number">6.</span> <span class="toc-text">六、④ 边界层：系统里最危险的地方，恰好是 TS 管不到的地方</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E2%91%A4-%E8%AE%BE%E8%AE%A1%E5%B1%82%EF%BC%9A%E6%8A%8A%E3%80%8C%E4%B8%9A%E5%8A%A1%E4%B8%8D%E5%8F%98%E9%87%8F%E3%80%8D%E7%BC%96%E7%A0%81%E8%BF%9B%E7%B1%BB%E5%9E%8B"><span class="toc-number">7.</span> <span class="toc-text">七、⑤ 设计层：把「业务不变量」编码进类型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E7%BB%83%E4%B9%A0%E8%B7%AF%E5%BE%84%EF%BC%8C%E5%92%8C%E3%80%8C%E8%AF%A5%E5%9C%A8%E5%93%AA%E5%81%9C%E3%80%8D"><span class="toc-number">8.</span> <span class="toc-text">八、练习路径，和「该在哪停」</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%93%E8%AF%AD"><span class="toc-number">9.</span> <span class="toc-text">结语</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/ts-type-safe-request/" title="泛型与条件类型实战：写一个类型安全的请求封装">泛型与条件类型实战：写一个类型安全的请求封装</a><time datetime="2026-09-10T14:40:00.000Z" title="发表于 2026-09-10 22:40:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/pinia-vs-vuex/" title="Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store">Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store</a><time datetime="2026-09-10T13:30:00.000Z" title="发表于 2026-09-10 21:30:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/typescript-advanced-map/" title="TypeScript 进阶地图：从「会用」到「会设计类型」">TypeScript 进阶地图：从「会用」到「会设计类型」</a><time datetime="2026-09-10T09:00:00.000Z" title="发表于 2026-09-10 17:00:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/springboot-big-event-project/" title="Spring Boot 项目实战复盘：big-event 文章管理系统（JWT + Redis + MyBatis + MinIO）">Spring Boot 项目实战复盘：big-event 文章管理系统（JWT + Redis + MyBatis + MinIO）</a><time datetime="2026-09-10T08:30:00.000Z" title="发表于 2026-09-10 16:30:00">2026-09-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/10/vite-webpack-migration/" title="Vite vs Webpack：迁移成本与收益评估——老项目值不值得换一次引擎">Vite vs Webpack：迁移成本与收益评估——老项目值不值得换一次引擎</a><time datetime="2026-09-10T08:00:00.000Z" title="发表于 2026-09-10 16:00:00">2026-09-10</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By StellaCode98</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.2</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.7.0</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><div class="js-pjax"></div><video id="site-video" src="/video/gufeng-snow.mp4" poster="/img/gufeng-girl.webp" autoplay loop muted playsinline disablepictureinpicture></video><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></div></body></html>
