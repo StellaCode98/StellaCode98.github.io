@@ -47,7 +47,7 @@ code_blocks:
 # 格式:
 #   icon: 鏈接 || 描述 || 顏色
 social:
-  fab fa-github: https://github.com/kxl-823 || GitHub || "#24292e"
+  fab fa-github: https://github.com/StellaCode98 || GitHub || "#24292e"
 
 # --------------------------------------
 # 圖片設置
@@ -342,7 +342,7 @@ aside:
       # 按鈕文本
       text: Follow Me
       # 按鈕鏈接
-      link: https://github.com/kxl-823
+      link: https://github.com/StellaCode98
   card_announcement:
     # 是否顯示公告卡片
     enable: true
