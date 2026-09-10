@@ -7,7 +7,6 @@ categories:
 tags:
   - Cesium
   - GIS
-  - 三维可视化
   - Vue3
   - Vite
 ---

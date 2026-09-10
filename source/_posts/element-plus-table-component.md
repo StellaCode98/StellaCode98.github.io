@@ -7,9 +7,7 @@ categories:
 tags:
   - vue3
   - element-plus
-  - 组件封装
   - typescript
-  - 中后台
 ---
 
 写过中后台的同学都有体感：列表页的模板代码一半是 `<el-table-column>` 的复制粘贴，另一半是 `<el-pagination>` 的事件处理。一个页面十几列，`loading`、空状态、序号列、多选框、操作列插槽……每个页面把这些再写一遍，改一个列宽要去模板里翻半天。

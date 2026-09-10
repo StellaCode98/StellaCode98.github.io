@@ -3,13 +3,11 @@ title: Vite vs Webpack：迁移成本与收益评估——老项目值不值得�
 date: 2026-09-10 16:00:00
 description: 新项目无脑选 Vite 没有争议，有争议的是已经在 Webpack 上跑着的项目——要不要迁？这篇把账拆开算：收益几乎全部在开发态（冷启动分钟级变秒级、HMR 与项目规模解耦、配置面缩小），生产构建反而未必更快；成本大头不在配置翻译，而在环境变量体系、没有对等物的 loader/插件、以及一次完整的回归验证。文中给 loader 对照表、压成本的迁移路径、以及一张决策表——活跃迭代的标准应用值得迁，维护期项目不迁改用 esbuild-loader 提速，重度 Module Federation 走 Rspack 兼容路线。
 categories:
-  - [前端工程化, 构建工具]
+  - [前端工程化,Vite]
 tags:
   - Vite
   - Webpack
-  - 构建工具
   - 工程化
-  - Rspack
 ---
 
 「Vite 为什么快」已经写过了（见[《Webpack 与 Rollup》](/2026/09/10/webpack-vs-rollup/)末尾），这篇聊一个更折磨人的问题：**已经在 Webpack 上稳定运行的项目，要不要迁 Vite？**

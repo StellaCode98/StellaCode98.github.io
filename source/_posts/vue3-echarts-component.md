@@ -6,11 +6,8 @@ categories:
   - Vue 进阶
 tags:
   - vue3
-  - echarts
-  - 组件封装
-  - typescript
-  - 数据可视化
-  - 中后台
+  - Echarts
+  - Typescript
 ---
 
 写过数据大屏或中后台仪表盘的同学都有体感：一个页面四五张图，每张图都要 `init`、`setOption`、监听 `resize`、卸载时 `dispose`，四步曲抄四遍。更要命的是坑全藏在细节里——容器没有确定高度白屏、侧边栏折叠之后图不跟着缩、echarts 实例塞进 `ref()` 被 Vue 深度代理出幺蛾子、页面来回切换内存泄漏。

@@ -6,9 +6,8 @@ categories:
   - Vue 进阶
 tags:
   - vue3
-  - pinia
-  - maplibre
-  - gis
+  - Pinia
+  - Maplibre
   - 前端架构
 ---
 

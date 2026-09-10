@@ -6,9 +6,6 @@ categories:
   - [前端工程化, css]
 tags:
   - CSS
-  - CSS Modules
-  - CSS-in-JS
-  - Tailwind
   - 工程化
 ---
 

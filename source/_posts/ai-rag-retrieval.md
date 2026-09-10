@@ -4,7 +4,7 @@ title: "AI 工程化五件套（四）RAG：先检索再生成，让 AI 用上�
 date: 2026-09-10 10:00:00
 description: "RAG 的完整链路：文档切分 → 向量化 → 相似度检索 → 带上下文生成；不用任何框架、纯手写搭一个能查内部文档的问答，以及日常落地中最影响效果的三个环节。"
 categories: [AI 应用开发]
-tags: [AI, RAG, Embedding, 向量检索, LLM]
+tags: [AI, RAG, LLM]
 ---
 
 > 「AI 工程化五件套」系列第四篇。开篇与完整概念对照表见 [Spec 篇](/2026/09/10/ai-coding-spec-driven/)。

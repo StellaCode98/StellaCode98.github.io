@@ -7,7 +7,6 @@ categories:
 tags:
   - javascript
   - Promise
-  - 异步
   - Event Loop
   - async/await
 ---

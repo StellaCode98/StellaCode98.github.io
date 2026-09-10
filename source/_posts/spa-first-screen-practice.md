@@ -7,8 +7,8 @@ categories:
 tags:
   - 性能优化
   - SPA
-  - vite
-  - vue3
+  - Vite
+  - Vue3
 ---
 
 上一篇[《SPA 首屏优化：减体积、抢网络、缩白屏》](/2026/09/10/spa-first-screen-optimization/)把理论清单列全了。这篇是它的落地篇——我拿手头一个数据可视化大屏项目（Vue 3 + Vite + MapLibre GL）逐条对照那份清单，**有代码支撑的讲透实现，没落地的在文末如实记账**。
