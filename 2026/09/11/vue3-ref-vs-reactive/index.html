@@ -1,0 +1,279 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>Vue3 中 ref 与 reactive 的区别 | StellaCode98</title><meta name="author" content="StellaCode98"><meta name="copyright" content="StellaCode98"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="ref 是包装任意值的引用对象，reactive 是对象的 Proxy 代理。从实现原理、.value、基本类型支持、重新赋值、解构丢失等角度对比两者，并说明为什么官方推荐默认用 ref。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Vue3 中 ref 与 reactive 的区别">
+<meta property="og:url" content="https://stellacode98.github.io/2026/09/11/vue3-ref-vs-reactive/index.html">
+<meta property="og:site_name" content="StellaCode98">
+<meta property="og:description" content="ref 是包装任意值的引用对象，reactive 是对象的 Proxy 代理。从实现原理、.value、基本类型支持、重新赋值、解构丢失等角度对比两者，并说明为什么官方推荐默认用 ref。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://stellacode98.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-09-11T03:30:00.000Z">
+<meta property="article:modified_time" content="2026-09-11T03:25:27.265Z">
+<meta property="article:author" content="StellaCode98">
+<meta property="article:tag" content="Vue">
+<meta property="article:tag" content="Vue3">
+<meta property="article:tag" content="响应式">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://stellacode98.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Vue3 中 ref 与 reactive 的区别",
+  "url": "https://stellacode98.github.io/2026/09/11/vue3-ref-vs-reactive/",
+  "image": "https://stellacode98.github.io/img/avatar.jpg",
+  "datePublished": "2026-09-11T03:30:00.000Z",
+  "dateModified": "2026-09-11T03:25:27.265Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "StellaCode98",
+      "url": "https://stellacode98.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.ico"><link rel="canonical" href="https://stellacode98.github.io/2026/09/11/vue3-ref-vs-reactive/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'Vue3 中 ref 与 reactive 的区别',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/bg-video.css"><link rel="stylesheet" href="/css/gufeng-soft.css"><meta name="generator" content="Hexo 8.1.2"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">36</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">61</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">22</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/gufeng-girl.webp);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">StellaCode98</span></a><a class="nav-page-title" href="/"><span class="site-name">Vue3 中 ref 与 reactive 的区别</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">Vue3 中 ref 与 reactive 的区别</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-11T03:30:00.000Z" title="发表于 2026-09-11 11:30:00">2026-09-11</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-11T03:25:27.265Z" title="更新于 2026-09-11 11:25:27">2026-09-11</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/Vue/">Vue</a><i class="fas fa-angle-right post-meta-separator"></i><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/Vue/%E6%BA%90%E7%A0%81/">源码</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="Vue3-中-ref-与-reactive-的区别"><a href="#Vue3-中-ref-与-reactive-的区别" class="headerlink" title="Vue3 中 ref 与 reactive 的区别"></a>Vue3 中 ref 与 reactive 的区别</h1><p>Vue3 创建响应式数据有两个 API：<code>ref</code> 和 <code>reactive</code>。很多人只是记住了”基本类型用 ref、对象用 reactive”，但真到用时还是会踩坑：<code>.value</code> 忘了写、reactive 解构后不更新、整体替换后失去响应式……</p>
+<p>这些坑的根源在于两者的<strong>实现方式不同</strong>。理解了原理，区别自然就清楚了。</p>
+<hr>
+<h2 id="一、实现原理不同"><a href="#一、实现原理不同" class="headerlink" title="一、实现原理不同"></a>一、实现原理不同</h2><figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> count = <span class="hljs-title function_">ref</span>(<span class="hljs-number">0</span>)        <span class="hljs-comment">// RefImpl 实例：&#123; value: 0 &#125;</span><br><span class="hljs-keyword">const</span> state = <span class="hljs-title function_">reactive</span>(&#123; <span class="hljs-attr">count</span>: <span class="hljs-number">0</span> &#125;)  <span class="hljs-comment">// Proxy 代理对象</span><br></code></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>ref</strong>：返回一个 <code>RefImpl</code> 类实例，内部只有一个 <code>value</code> 属性，依赖收集和触发更新都挂在 <code>value</code> 的 getter &#x2F; setter 上。访问 <code>count.value</code> 时 track，修改时 trigger。</li>
+<li><strong>reactive</strong>：直接返回原对象的 Proxy 代理（Vue3 响应式系统的基础能力），拦截 get &#x2F; set &#x2F; deleteProperty 等所有操作，逐属性追踪。</li>
+</ul>
+<p>一句话：<strong>ref 是自己实现的”盒子”，reactive 是 Proxy 代理</strong>。ref 的底层就是把 value 挂到类实例上做 getter&#x2F;setter 拦截，没有用 Proxy（所以 <code>ref(undefined)</code> 也可以，不存在代理目标的问题）。</p>
+<h2 id="二、基本类型：只有-ref-能做"><a href="#二、基本类型：只有-ref-能做" class="headerlink" title="二、基本类型：只有 ref 能做"></a>二、基本类型：只有 ref 能做</h2><p>Proxy 只能代理对象，无法拦截 <code>let n = 0</code> 这种基本类型的读写。JavaScript 中基本类型按值传递，没有办法追踪它的修改。</p>
+<p>所以：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> count = <span class="hljs-title function_">ref</span>(<span class="hljs-number">0</span>)              <span class="hljs-comment">// ✅ 基本类型只能用 ref</span><br><span class="hljs-keyword">const</span> state = <span class="hljs-title function_">reactive</span>(<span class="hljs-number">0</span>)         <span class="hljs-comment">// ❌ 警告：value cannot be made reactive</span><br></code></pre></td></tr></table></figure>
+
+<p>ref 用”盒子 + <code>.value</code>“这种略显别扭的设计，就是为了把基本类型包进对象里再追踪——<code>.value</code> 就是访问这个盒子的代价。</p>
+<h2 id="三、-value：模板自动解包，JS-中必须手写"><a href="#三、-value：模板自动解包，JS-中必须手写" class="headerlink" title="三、.value：模板自动解包，JS 中必须手写"></a>三、.value：模板自动解包，JS 中必须手写</h2><figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-tag">&lt;<span class="hljs-name">template</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>&#123;&#123; count &#125;&#125;<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>   <span class="hljs-comment">&lt;!-- 模板中自动解包，不写 .value --&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">template</span>&gt;</span><br><br><span class="hljs-tag">&lt;<span class="hljs-name">script</span> <span class="hljs-attr">setup</span>&gt;</span><span class="language-javascript"></span><br><span class="language-javascript"><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(count)        <span class="hljs-comment">// RefImpl &#123;...&#125;</span></span><br><span class="language-javascript"><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(count.<span class="hljs-property">value</span>)  <span class="hljs-comment">// 0</span></span><br><span class="language-javascript">count.<span class="hljs-property">value</span>++             <span class="hljs-comment">// 修改必须 .value</span></span><br><span class="language-javascript"></span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span><br></code></pre></td></tr></table></figure>
+
+<p>模板中顶层 ref 会自动解包；但在 JS 逻辑里必须写 <code>.value</code>。忘写 <code>.value</code> 是 ref 最常见的坑——本质原因是<strong>如果不经过 <code>.value</code>，JavaScript 无法感知你对这个值的读写</strong>。</p>
+<p>reactive 没有这个问题，<code>state.count++</code> 直接用。这是很多人偏爱 reactive 的原因。</p>
+<h2 id="四、重新赋值：ref-安全，reactive-会失去响应式"><a href="#四、重新赋值：ref-安全，reactive-会失去响应式" class="headerlink" title="四、重新赋值：ref 安全，reactive 会失去响应式"></a>四、重新赋值：ref 安全，reactive 会失去响应式</h2><figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> state = <span class="hljs-title function_">reactive</span>(&#123; <span class="hljs-attr">list</span>: [] &#125;)<br><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">load</span>(<span class="hljs-params">data</span>) &#123;<br>  state = data       <span class="hljs-comment">// ❌ 报错：state 是 const；即使换成 let，新对象也不是响应式的</span><br>  state.<span class="hljs-property">list</span> = data  <span class="hljs-comment">// ✅ 修改属性，代理仍生效</span><br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>reactive 返回的是<strong>代理对象</strong>，变量只是一个引用。整体替换后，变量指向了新的普通对象，与 Proxy 的联系断开，视图不再更新。所以 reactive 只能改属性，不能换整个对象。</p>
+<p>ref 则随时可以：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> list = <span class="hljs-title function_">ref</span>([])<br>list.<span class="hljs-property">value</span> = [<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>]  <span class="hljs-comment">// ✅ 触发的是 value 的 setter，响应式不丢</span><br></code></pre></td></tr></table></figure>
+
+<h2 id="五、reactive-的另一个坑：解构会丢失响应式"><a href="#五、reactive-的另一个坑：解构会丢失响应式" class="headerlink" title="五、reactive 的另一个坑：解构会丢失响应式"></a>五、reactive 的另一个坑：解构会丢失响应式</h2><figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> state = <span class="hljs-title function_">reactive</span>(&#123; <span class="hljs-attr">count</span>: <span class="hljs-number">0</span> &#125;)<br><span class="hljs-keyword">let</span> &#123; count &#125; = state   <span class="hljs-comment">// ❌ count 变成普通数字，与代理断开</span><br>count++                 <span class="hljs-comment">// 视图不更新</span><br></code></pre></td></tr></table></figure>
+
+<p>解构相当于读了一次属性值赋给新变量，之后修改新变量与代理无关。需要解构时用 <code>toRefs</code> &#x2F; <code>toRef</code> 把每个属性转成 ref 保持联系。</p>
+<h2 id="六、ref-传对象：内部自动用-reactive"><a href="#六、ref-传对象：内部自动用-reactive" class="headerlink" title="六、ref 传对象：内部自动用 reactive"></a>六、ref 传对象：内部自动用 reactive</h2><p>ref 并不排斥对象，反而做了兼容：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> state = <span class="hljs-title function_">ref</span>(&#123; <span class="hljs-attr">count</span>: <span class="hljs-number">0</span> &#125;)<br>state.<span class="hljs-property">value</span>.<span class="hljs-property">count</span>++   <span class="hljs-comment">// ✅ 深层响应式</span><br></code></pre></td></tr></table></figure>
+
+<p><code>ref</code> 内部逻辑是：如果传入的是对象，就调用 <code>reactive</code> 包装后再存入 <code>value</code>（源码中就一行 <code>toReactive</code>）。所以 <strong>ref(对象) &#x3D; 对象的 reactive + 外层引用包装</strong>，两层能力都有。</p>
+<hr>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><table>
+<thead>
+<tr>
+<th>对比项</th>
+<th>ref</th>
+<th>reactive</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>实现方式</td>
+<td>RefImpl 类实例，getter&#x2F;setter 拦截 <code>.value</code></td>
+<td>Proxy 代理整个对象</td>
+</tr>
+<tr>
+<td>支持类型</td>
+<td>任意（基本类型、对象）</td>
+<td>仅对象 &#x2F; 数组等引用类型</td>
+</tr>
+<tr>
+<td>取值写法</td>
+<td>JS 中必须 <code>.value</code>，模板自动解包</td>
+<td>直接 <code>state.xx</code></td>
+</tr>
+<tr>
+<td>整体重新赋值</td>
+<td>✅ 安全，不丢响应式</td>
+<td>❌ 失去响应式，只能改属性</td>
+</tr>
+<tr>
+<td>解构</td>
+<td>✅ 解构后仍是 ref（需 <code>.value</code>）</td>
+<td>❌ 解构即断开，需 <code>toRefs</code></td>
+</tr>
+<tr>
+<td>深层对象</td>
+<td>传入对象时内部自动调用 reactive</td>
+<td>默认深层响应</td>
+</tr>
+</tbody></table>
+<p><strong>实践建议</strong>：默认用 <code>ref</code>，统一心智模型，不用纠结数据类型、也不用记 reactive 的两个坑；<code>reactive</code> 适合”一组相关数据的聚合体”这种不会被整体替换、不需要解构的场景。团队协作时保持风格统一，比选哪个更重要。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io">StellaCode98</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://stellacode98.github.io/2026/09/11/vue3-ref-vs-reactive/">https://stellacode98.github.io/2026/09/11/vue3-ref-vs-reactive/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://stellacode98.github.io" target="_blank">StellaCode98</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/Vue3/">Vue3</a><a class="post-meta__tags" href="/tags/Vue/">Vue</a><a class="post-meta__tags" href="/tags/%E5%93%8D%E5%BA%94%E5%BC%8F/">响应式</a></div><div class="post-share"><div class="social-share" data-image="/img/avatar.jpg" data-sites="wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/09/11/vite-why-fast/" title="Vite 为什么那么快"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">Vite 为什么那么快</div></div><div class="info-2"><div class="info-item-1">Vite 为什么那么快“Vite 快”是所有人的第一体感：冷启动从分钟级变秒级，改一行代码浏览器几乎瞬间刷新。但 Vite 快在哪，答案不是”优化做得好”，而是架构上少做了事。 一句话先给结论：  Webpack 的开发服务器先把整个应用打包成 bundle 再启动；Vite 开发态根本不打包——把模块加载交还给浏览器（原生 ESM），把依赖处理交给 esbuild，自己只做按需编译。   一、先看 Webpack 慢在哪：慢是结构性的Webpack dev server 的工作方式： 1启动 → 从入口递归解析整个依赖图 → 逐模块 transform → 打包成 bundle → 启动服务  问题在这两件事上：  冷启动与项目规模成正比。模块从 100 个涨到 5000 个，启动时间跟着线性涨——哪怕你这次只改一个小功能，也得等全量打包完。 HMR 也随规模变慢。热更新虽然只改一个文件，但要重新打包受影响的 chunk、重新拼接模块注册表，项目越大这笔开销越大。  也就是说，慢的根源是：“打包”这个动作发生在启动时，而打包的工作量天生与项目规模挂钩。 二、Vite 的核心答案...</div></div></div></a><a class="pagination-related" href="/2026/09/10/pinia-vs-vuex/" title="Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store</div></div><div class="info-2"><div class="info-item-1">这两个库解决的问题只有一个：多个组件共享同一份状态。但它们给出的答案，恰好对应了 Vue2 和 Vue3 两代技术栈的世界观——Vuex 是「中心化的单一仓库 + 单向数据流」，Pinia 是「一组全局的组合式函数」。  先说结论：Vuex 强制把「改状态」拆成 mutations（同步）和 actions（异步），是为了在 Options API 时代让 DevTools 能可靠追踪每一次变更；Vue3 的响应式系统本身就能观测到任何途径的修改，这层强制拆分失去了意义，于是 Pinia 把它删掉了，同时用「天然按 id 拆分的扁平 store」取代了 Vuex 的嵌套 modules。新项目（Vue3）直接用 Pinia，没有第二个选项；Vue2 老项目继续 Vuex，不必强行迁移。    一、为什么需要状态管理组件化把页面拆成了树，但状态经常不属于任何一棵子树——登录态、用户信息、购物车、主题配置，都是「很多组件都要读写」的东西。不借助任何方案时，只有两条路： 1. props 逐层透传（props drilling） 123456&lt;!-- App.vue 知道 use...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/09/09/cesium-data-loading/" title="Cesium 数据加载实战：从免 npm 引入到视口驱动的增量上球"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">Cesium 数据加载实战：从免 npm 引入到视口驱动的增量上球</div></div><div class="info-2"><div class="info-item-1"> 这篇文章不是 Cesium 入门教程，而是一次真实项目的落地复盘。最近负责的 Vue3 + Vite 项目里有一块三维地图：CesiumJS 1.123，渲染几十类基础设施（变电站、发电厂、线路……）的点线面数据，支持视口内动态加载、拓扑流动网络、实时事件告警。网上 Cesium 教程大多停留在「new 一个 Viewer + GeoJsonDataSource.load 一个文件」，而真实项目里你要回答的问题其实是：内网离线环境怎么跑、几万个实体怎么不卡、拖动地图时数据怎么增量进出、内存怎么不涨爆。本文按数据流动的顺序，把这条链路从头到尾拆开讲。所有代码都来自这个真实项目，文末附完整文件地图。  目录 0. 前言：一个真实的 Cesium 项目长什么样 1. 加载 Cesium 本体：不用 npm、不用 vite-plugin-cesium 2. Viewer 初始化：先拿到一个”干净”的球 3. 影像底图加载：配置驱动的多源图层 4. 业务数据上球：为什么放弃 Entity，改用 Primitive 5. 视口驱动的增量加载：只请求”看得见”的数据 6. 让数据”活”起来：...</div></div></div></a><a class="pagination-related" href="/2026/09/09/front-end-permission/" title="前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">前端权限控制实战：从 token 到 v-auth 指令，数据权限放在哪一层？</div></div><div class="info-2"><div class="info-item-1"> 这是真实项目复盘系列的第二篇。这个 Vue3 + Vite + Pinia + Ant Design Vue 的后台系统里，权限是典型的”隐形基础设施”：平时没人注意它，直到某天测试提了个 bug——“为什么这个角色看不到导出按钮”。本文把这套权限体系完整拆开：登录凭证怎么存、权限码怎么建模、按钮和菜单怎么按权限显隐、角色权限在哪个界面配出来，以及一个几乎所有后台项目都会遇到、也最容易做错的问题——数据权限（数据范围过滤）到底放在前端还是后端。先说结论：这个项目把数据权限完全交给了后端，前端只做了功能层（菜单&#x2F;按钮）权限。为什么这样选、边界在哪，第 7 节详细展开。  目录 0. 前言：前端权限到底防谁 1. 登录与凭证：token 从哪来，权限快照存哪去 2. 权限数据模型：两张 Map 与「模块:动作」权限码 3. 判断核心：hasBtnAuth &#x2F; hasAuth 双函数 4. 双指令：v-auth 与 v-menuAuth 5. 三层显隐实战：模块入口 → Tab → 按钮 6. 权限的配置面：角色管理与权限树 7. 数据权限：这一层前端做了什么、该...</div></div></div></a><a class="pagination-related" href="/2026/09/09/vue-diff-and-key/" title="虚拟 DOM diff 算法与 key 的正确用法"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">虚拟 DOM diff 算法与 key 的正确用法</div></div><div class="info-2"><div class="info-item-1">虚拟 DOM diff 算法与 key 的正确用法v-for 总被编辑器警告要加 :key，加了警告就消失。但 key 到底参与了什么过程？为什么不能用 index 当 key？为什么 Math.random() 当 key 更糟？ 这些问题都指向同一个东西：diff 算法。本笔记讲三件事：diff 的基本策略、Vue2 &#x2F; Vue3 实现的区别、key 的正确用法。  一、diff 解决了什么问题1数据变化 → 生成新 vnode → 与旧树对比 → 计算最小的真实 DOM 操作 → 更新页面   diff 的目标不是”找出所有不同”，而是：用尽可能少的真实 DOM 操作，把旧树变成新树——用廉价的 JS 计算换昂贵的 DOM 操作。 完整对比两棵树（树编辑距离）是 O(n³)，完全不可用；Vue 基于经验假设把它简化到了线性 O(n)。  二、三条基本策略 只做同层比较：跨层级移动被当作”旧位置删除 + 新位置创建”，而不是移动。 类型不同，直接重建：&lt;div&gt; → &lt;span&gt; 不再深入对比，删旧子树、建新子树。 用 key 标识节点：判断...</div></div></div></a><a class="pagination-related" href="/2026/09/09/element-plus-table-component/" title="封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">封装一个 Element Plus 通用表格组件：配置驱动、插槽透传与单选模拟</div></div><div class="info-2"><div class="info-item-1">写过中后台的同学都有体感：列表页的模板代码一半是 &lt;el-table-column&gt; 的复制粘贴，另一半是 &lt;el-pagination&gt; 的事件处理。一个页面十几列，loading、空状态、序号列、多选框、操作列插槽……每个页面把这些再写一遍，改一个列宽要去模板里翻半天。 之前项目里沉淀了一个基于 Element Plus 的通用表格组件，最近又在新项目里用一个「后端下发表头」的动态列场景喂了它一波，正好把完整代码和设计思路整理出来。组件不大，两百多行，但里面有几个值得抠的设计点：配置驱动、插槽透传、单选模拟、跨页多选、分页状态归属。   一、API 设计：三个 prop、三个事件、一个 expose先看组件对外的契约，封装一个组件最重要的就是先把 API 定稳： 12345678910111213props  data     : any[]          行数据  header   : HeaderItem[]   列配置（JSON 声明，见下表）  config   : TableConfig    表格行为配置（loading/total/多...</div></div></div></a><a class="pagination-related" href="/2026/09/09/vue-responsive-contrast/" title="Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 Proxy"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-09</div><div class="info-item-2">Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 Proxy</div></div><div class="info-2"><div class="info-item-1">Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 ProxyVue 最核心的能力之一，就是响应式：只需要修改数据 state.count++，页面就会自动更新，不需要手动查找和修改 DOM。 1修改数据 → 响应式系统感知变化 → 找到依赖该数据的逻辑 → 重新执行 → 视图更新  Vue2 和 Vue3 都实现了这套机制，但底层实现存在明显区别： 12Vue2：Object.defineProperty → getter / setter → Dep / WatcherVue3：Proxy → track / trigger → effect  从 Vue2 到 Vue3，并不只是把一个 API 换成另一个 API，而是响应式系统整体设计的一次变化。本文从 Object.defineProperty 开始，逐步理解 Vue2 的实现方式，再看 Vue3 为什么引入 Proxy，以及两套系统的区别。  一、响应式系统解决了什么问题先抛开 Vue，只考虑一个最简单的问题： 12345const state = &#123; count: 0...</div></div></div></a><a class="pagination-related" href="/2026/09/11/ai-from-streaming/" title="前端工程师的 AI 入门：从流式接口到落地一个 AI 应用"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-11</div><div class="info-item-2">前端工程师的 AI 入门：从流式接口到落地一个 AI 应用</div></div><div class="info-2"><div class="info-item-1"> 这篇文章不是概念科普，而是一次真实的落地复盘。最近我在自己的 Vue3 后台管理项目（vue3_admin）里完整实现了一个 AI 智能问答模块：支持 SSE 流式打字机输出、多轮对话记忆、Function Calling 工具调用、可视化组件渲染、会话持久化。本文把这条链路从头到尾拆开讲——为什么需要流式、前端怎么手写 SSE 解析器、Function Calling 的两轮循环到底转了什么、以及从 demo 到可用应用之间隔着哪些工程细节。所有代码都来自这个真实模块，文末附完整文件地图。  目录 0. 前言：前端工程师离 AI 应用有多远 1. 认识流式接口：AI 的回复为什么是”蹦”出来的 2. 服务端：把模型的流转发给浏览器 3. 前端：手写一个 SSE 解析器 4. 从”流”到”聊天界面”：状态编排层 5. 让 AI 用上你的函数：Function Calling 6. 落地成应用：demo 和工程之间隔着什么 7. 展望：MCP 离我们还有多远 8. 写在最后   0. 前言：前端工程师离 AI 应用有多远打开 ChatGPT 或者任何 AI 对话产品，仔细观察它的...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">StellaCode98</div><div class="author-info-description">记录前端学习与开发中的思考</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">36</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">61</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">22</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/StellaCode98"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/StellaCode98" target="_blank" title="GitHub"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">欢迎来到我的小站，这里记录我的学习笔记与实践心得</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Vue3-%E4%B8%AD-ref-%E4%B8%8E-reactive-%E7%9A%84%E5%8C%BA%E5%88%AB"><span class="toc-number">1.</span> <span class="toc-text">Vue3 中 ref 与 reactive 的区别</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86%E4%B8%8D%E5%90%8C"><span class="toc-number">1.1.</span> <span class="toc-text">一、实现原理不同</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E5%9F%BA%E6%9C%AC%E7%B1%BB%E5%9E%8B%EF%BC%9A%E5%8F%AA%E6%9C%89-ref-%E8%83%BD%E5%81%9A"><span class="toc-number">1.2.</span> <span class="toc-text">二、基本类型：只有 ref 能做</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81-value%EF%BC%9A%E6%A8%A1%E6%9D%BF%E8%87%AA%E5%8A%A8%E8%A7%A3%E5%8C%85%EF%BC%8CJS-%E4%B8%AD%E5%BF%85%E9%A1%BB%E6%89%8B%E5%86%99"><span class="toc-number">1.3.</span> <span class="toc-text">三、.value：模板自动解包，JS 中必须手写</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E9%87%8D%E6%96%B0%E8%B5%8B%E5%80%BC%EF%BC%9Aref-%E5%AE%89%E5%85%A8%EF%BC%8Creactive-%E4%BC%9A%E5%A4%B1%E5%8E%BB%E5%93%8D%E5%BA%94%E5%BC%8F"><span class="toc-number">1.4.</span> <span class="toc-text">四、重新赋值：ref 安全，reactive 会失去响应式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81reactive-%E7%9A%84%E5%8F%A6%E4%B8%80%E4%B8%AA%E5%9D%91%EF%BC%9A%E8%A7%A3%E6%9E%84%E4%BC%9A%E4%B8%A2%E5%A4%B1%E5%93%8D%E5%BA%94%E5%BC%8F"><span class="toc-number">1.5.</span> <span class="toc-text">五、reactive 的另一个坑：解构会丢失响应式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81ref-%E4%BC%A0%E5%AF%B9%E8%B1%A1%EF%BC%9A%E5%86%85%E9%83%A8%E8%87%AA%E5%8A%A8%E7%94%A8-reactive"><span class="toc-number">1.6.</span> <span class="toc-text">六、ref 传对象：内部自动用 reactive</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">1.7.</span> <span class="toc-text">总结</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/11/ai-function-calling-basics/" title="AI 工程化五件套（五）Function Calling：让模型从「会说」到「会做」的机制">AI 工程化五件套（五）Function Calling：让模型从「会说」到「会做」的机制</a><time datetime="2026-09-11T05:30:02.000Z" title="发表于 2026-09-11 13:30:02">2026-09-11</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/11/ai-rag-retrieval/" title="AI 工程化五件套（四）RAG：先检索再生成，让 AI 用上你的私有知识">AI 工程化五件套（四）RAG：先检索再生成，让 AI 用上你的私有知识</a><time datetime="2026-09-11T05:20:00.000Z" title="发表于 2026-09-11 13:20:00">2026-09-11</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/11/ai-mcp-protocol/" title="AI 工程化五件套（三）MCP：给 AI 应用接工具的 USB 接口">AI 工程化五件套（三）MCP：给 AI 应用接工具的 USB 接口</a><time datetime="2026-09-11T05:15:00.000Z" title="发表于 2026-09-11 13:15:00">2026-09-11</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/11/ai-agent-skill/" title="AI 工程化五件套（二）Skill：给 AI 一本按需加载的团队操作手册">AI 工程化五件套（二）Skill：给 AI 一本按需加载的团队操作手册</a><time datetime="2026-09-11T05:10:00.000Z" title="发表于 2026-09-11 13:10:00">2026-09-11</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/09/11/ai-coding-spec-driven/" title="AI 工程化五件套（一）Spec：把需求写成规格，AI 才不会自由发挥">AI 工程化五件套（一）Spec：把需求写成规格，AI 才不会自由发挥</a><time datetime="2026-09-11T05:00:00.000Z" title="发表于 2026-09-11 13:00:00">2026-09-11</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By StellaCode98</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.2</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.7.0</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><div class="js-pjax"></div><video id="site-video" src="/video/gufeng-snow.mp4" poster="/img/gufeng-girl.webp" autoplay loop muted playsinline disablepictureinpicture></video><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></div></body></html>
