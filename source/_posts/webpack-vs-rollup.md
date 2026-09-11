@@ -5,7 +5,6 @@ description: 两者都是打包器，但回答的问题不同：Webpack 面向�
 categories:
   - [前端基础, 工程化]
 tags:
-  - 构建工具
   - Webpack
   - Rollup
   - 工程化

@@ -3,9 +3,9 @@ title: 手写防抖与节流：30 行核心代码，讲清两件事
 date: 2026-09-10 10:00:00
 description: 防抖和节流都是「高频事件降频」的手段：防抖只认最后一次——停止触发 wait 毫秒后才执行；节流认时间窗口——无论触发多频繁，固定周期内最多执行一次。本文手写 debounce / throttle 的基础版、立即执行版与合并版，一张表说清该用哪个。
 categories:
-  - [前端基础, javascript]
+  - [前端基础, JavaScript]
 tags:
-  - javascript
+  - JavaScript
   - 性能优化
 ---
 

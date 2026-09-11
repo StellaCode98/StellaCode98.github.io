@@ -1,10 +1,10 @@
 ---
 layout: post
 title: "AI 工程化五件套（二）Skill：给 AI 一本按需加载的团队操作手册"
-date: 2026-09-10 10:00:00
+date: 2026-09-10 10:10:00
 description: "Agent Skill 是什么、和系统提示词/自定义命令/RAG/MCP 的区别在哪、SKILL.md 的渐进式加载机制，以及日常开发中怎么把重复劳动和踩坑记录沉淀成 Skill。"
 categories: [AI 应用开发]
-tags: [AI, Skill, Agent, Prompt 工程]
+tags: [AI, Skill, Agent]
 ---
 
 > 「AI 工程化五件套」系列第二篇。开篇与完整概念对照表见 [Spec 篇](/2026/09/10/ai-coding-spec-driven/)。

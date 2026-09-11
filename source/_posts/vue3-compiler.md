@@ -6,7 +6,6 @@ categories:
   - [Vue, 源码]
 tags:
   - Vue3
-  - patchFlag
   - 性能优化
 ---
 

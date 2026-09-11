@@ -3,9 +3,9 @@ title: Promise 全景：从回调地狱、状态机到微任务与链式调用
 date: 2026-09-09 15:30:00
 description: Promise 不只是解决回调地狱的 API，而是一套「异步结果管理 + 后续任务组合」的抽象：状态机保存结果，then 注册后续并返回新 Promise 形成链，微任务决定执行时机。本文从状态机、执行时机、链式规则讲到组合 API 与 async/await。
 categories:
-  - [前端基础, javascript]
+  - [前端基础, JavaScript]
 tags:
-  - javascript
+  - JavaScript
   - Promise
   - Event Loop
   - async/await

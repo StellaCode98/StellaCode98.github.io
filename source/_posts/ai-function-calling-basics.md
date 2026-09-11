@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "AI 工程化五件套（五）Function Calling：让模型从「会说」到「会做」的机制"
-date: 2026-09-10 10:00:00
+date: 2026-09-10 10:30:02
 description: "Function Calling 的两轮循环：模型不执行函数，只产出调用意图；用 OpenAI SDK 实现一个查天气的完整闭环，以及流式、并行调用、强制调用等进阶用法。"
 categories: [AI 应用开发]
 tags: [AI, Function Calling, LLM, Agent]

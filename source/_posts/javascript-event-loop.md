@@ -3,11 +3,11 @@ title: 事件循环全景：调用栈、宏任务、微任务与渲染帧
 date: 2026-09-09 11:30:00
 description: 事件循环不是 JavaScript 的特性，而是宿主环境（浏览器/Node）的调度机制：同步代码一口气跑完，每个宏任务之后微任务队列必清空，渲染只发生在任务之间。从调用栈讲到宏微任务的调度规则，再到 setTimeout(fn,0) 的 4ms 钳制、双 rAF 等帧技巧，最后覆盖 Node.js 的六个阶段与 setImmediate 的顺序之谜。
 categories:
-  - [前端基础, javascript]
+  - [前端基础, JavaScript]
 tags:
-  - javascript
+  - JavaScript
   - 事件循环
-  - node.js
+  - NodeJs
 ---
 
 我对事件循环的误解持续了很多年：最早以为「setTimeout 就是开个线程」，后来背下口诀「宏先微后」，直到连翻三次车：

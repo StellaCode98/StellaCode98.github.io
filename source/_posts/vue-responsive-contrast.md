@@ -8,8 +8,6 @@ categories:
 tags:
  - Vue2
  - Vue3
- - Proxy
-
 ---
 
 # Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 Proxy

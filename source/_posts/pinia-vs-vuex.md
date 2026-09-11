@@ -3,13 +3,12 @@ title: Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store
 date: 2026-09-10 21:30:00
 description: 一篇文章讲透 Vue 两个官方状态管理库：Vuex 的单向数据流与 mutations 存在的理由、它的五个痛点，Pinia 如何用组合式 API 逐个拆掉这些包袱；含 Option/Setup 双写法对照、$patch/$subscribe/$onAction 与插件机制原理、storeToRefs 解构响应性、组件外使用 store、Vuex → Pinia 迁移映射表与高频面试题。
 categories:
-  - [Vue, 状态管理]
+  - [Vue]
 tags:
   - Vue3
   - Vue2
   - Pinia
   - Vuex
-  - 状态管理
 ---
 
 这两个库解决的问题只有一个：**多个组件共享同一份状态**。但它们给出的答案，恰好对应了 Vue2 和 Vue3 两代技术栈的世界观——Vuex 是「中心化的单一仓库 + 单向数据流」，Pinia 是「一组全局的组合式函数」。

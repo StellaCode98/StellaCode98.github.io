@@ -5,10 +5,10 @@ description: 一个数据可视化大屏项目里数据加载的完整工程方�
 categories:
   - 前端工程化
 tags:
-  - axios
-  - websocket
-  - sse
-  - 前端工程化
+  - Axios
+  - Websocket
+  - SSE
+  - 工程化
 ---
 
 在一个数据可视化大屏项目里，「请求接口渲染数据」这件事被环境逼成了一套体系。三个现实约束：

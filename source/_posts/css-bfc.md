@@ -3,7 +3,7 @@ title: CSS 中的层叠上下文与 BFC：那些年「莫名其妙」的样式�
 date: 2026-09-09 16:30:00
 description: 从 z-index 失效、margin 溢出、浮动高度塌陷到父元素覆盖子元素，系统理解 CSS 中的层叠上下文与 BFC。
 categories:
-  - [前端基础, css]
+  - [前端基础, CSS]
 tags:
   - CSS
   - 前端基础
