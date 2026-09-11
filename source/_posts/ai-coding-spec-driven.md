@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "AI 工程化五件套（一）Spec：把需求写成规格，AI 才不会自由发挥"
-date: 2026-09-10 10:00:00
+date: 2026-09-11 13:00:00
 description: "Spec-Driven Development 入门：为什么 AI 编码时代要先写规格再写代码，一条 requirements → design → tasks → implement 的流水线怎么搭，附 EARS 格式示例。"
 categories: [AI 应用开发]
 tags: [AI, Spec, AI 编码]

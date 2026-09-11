@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "前端工程师的 AI 入门：从流式接口到落地一个 AI 应用"
-date: 2026-09-09 11:00:00 
+date: 2026-09-11 12:30:00 
 description: "以一个真实落地的 AI 聊天模块为例，讲透前端视角下的两大核心：SSE 流式对话与 Function Calling 工具调用——从协议、代码到工程化的所有坑。"
 categories: [AI 应用开发]
 tags: [AI, SSE, Function Calling, Vue3, NodeJs, LLM]

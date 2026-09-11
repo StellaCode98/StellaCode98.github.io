@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "AI 工程化五件套（三）MCP：给 AI 应用接工具的 USB 接口"
-date: 2026-09-10 10:15:00
+date: 2026-09-11 13:15:00
 description: "MCP 协议全景：Server 提供的三种能力（tools/resources/prompts）、stdio 与 HTTP 两种传输、一个可运行的天气查询 Server 实例，以及日常开发中的选型建议。"
 categories: [AI 应用开发]
 tags: [AI, MCP, Agent, Tool]
