@@ -12,7 +12,7 @@ tags:
 
 写过数据大屏或中后台仪表盘的同学都有体感：一个页面四五张图，每张图都要 `init`、`setOption`、监听 `resize`、卸载时 `dispose`，四步曲抄四遍。更要命的是坑全藏在细节里——容器没有确定高度白屏、侧边栏折叠之后图不跟着缩、echarts 实例塞进 `ref()` 被 Vue 深度代理出幺蛾子、页面来回切换内存泄漏。
 
-这篇把之前项目里沉淀的 ECharts 通用组件整理出来。组件很小，百来行，但设计目标一句话能说清：**使用者只关心一个 `options`**。柱状、折线、饼图、雷达、K 线……图表类型从来不是组件的维度，它只是 `options.series[].type` 里的一个字符串——所以一个组件就能装下所有类型的图表。
+这篇把之前项目里沉淀的 ECharts 通用组件整理出来。组件很小，百来行，但设计目标一句话能说清：使用者只关心一个 `options`。柱状、折线、饼图、雷达、K 线……图表类型从来不是组件的维度，它只是 `options.series[].type` 里的一个字符串——所以一个组件就能装下所有类型的图表。
 
 <!-- more -->
 
@@ -48,12 +48,12 @@ props 明细（接口上也都写了 JSDoc，IDE 悬停可见）：
 
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `options` | `EChartsOption` | 必传 | 图表配置，**唯一数据源**：画什么图、什么样式、什么数据全在这里 |
+| `options` | `EChartsOption` | 必传 | 图表配置，唯一数据源：画什么图、什么样式、什么数据全在这里 |
 | `width` | `string` | `'100%'` | 容器宽度，一般撑满父级 |
 | `height` | `string` | `'400px'` | 容器高度。echarts 必须有确定高度，父级没高度时必须显式传 |
-| `theme` | `string \| object` | — | 主题名（如 `'dark'`）或自定义主题对象；**变更时销毁重建** |
+| `theme` | `string \| object` | — | 主题名（如 `'dark'`）或自定义主题对象；变更时销毁重建 |
 | `renderer` | `'canvas' \| 'svg'` | `'canvas'` | 渲染器。canvas 性能与交互均衡；svg 在超大数据量下更省内存、可矢量导出 |
-| `autoResize` | `boolean` | `true` | 用 ResizeObserver 监听**容器**尺寸变化自动 resize |
+| `autoResize` | `boolean` | `true` | 用 ResizeObserver 监听容器尺寸变化自动 resize |
 | `loading` | `boolean` | `false` | 加载态，内部调 `showLoading` / `hideLoading` |
 | `isEmpty` | `boolean` | `false` | 空数据态：显示遮罩并 `clear()` 图表，避免画一个空坐标轴 |
 | `emptyText` | `string` | `'暂无数据'` | 空数据态文案 |
@@ -113,13 +113,13 @@ expose：
 </style>
 ```
 
-三个点：
+三个点。
 
-**1. 两层 div，外层定尺寸、内层给 echarts。** `echarts.init` 会接管目标 DOM 的绘制，把宽高、定位、遮罩这些「布局职责」留在外层，职责干净：尺寸变化监听绑在内层，空态遮罩盖在外层，互不干扰。
+1. 两层 div，外层定尺寸、内层给 echarts。`echarts.init` 会接管目标 DOM 的绘制，把宽高、定位、遮罩这些「布局职责」留在外层，职责干净：尺寸变化监听绑在内层，空态遮罩盖在外层，互不干扰。
 
-**2. 默认高度 400px 不是随手写的。** echarts 容器高度为 0 或 `auto` 时 `init` 会得到一张 0 高度的图（白屏），这是图表组件的第一号坑。给一个兜底默认值，同时把「必须显式给高度」写进文档——`height: 100%` 在父级没有确定高度时同样是 0，这种情况要么父级定高，要么传具体像素。
+2. 默认高度 400px 不是随手写的。echarts 容器高度为 0 或 `auto` 时 `init` 会得到一张 0 高度的图（白屏），这是图表组件的第一号坑。给一个兜底默认值，同时把「必须显式给高度」写进文档——`height: 100%` 在父级没有确定高度时同样是 0，这种情况要么父级定高，要么传具体像素。
 
-**3. `v-bind="$attrs"` 照旧透传。** 和表格那篇同一个原则：父组件想加 `class`、`style` 调布局不设限，封装不是墙。
+3. `v-bind="$attrs"` 照旧透传。和表格那篇同一个原则：父组件想加 `class`、`style` 调布局不设限，封装不是墙。
 
 ## 三、脚本：把 echarts 生命周期收进组件
 
@@ -260,15 +260,15 @@ defineExpose({
 
 ### 实例放 shallowRef：最隐蔽的坑
 
-`const chart = ref()` 看起来人畜无害，但 Vue 3 的 `ref` 会深度递归代理对象——echarts 实例内部有大量私有状态和 canvas 引用，被 Proxy 包一层之后轻则无谓的性能开销（每次内部访问都走一遍代理），重则行为异常（一些内部逻辑用对象引用做 WeakMap key，被代理后取不到）。`shallowRef` 只代理 `.value` 这一层，实例本体原样透传。同类的正确姿势还有给实例套 `markRaw`。这个坑不报错、不警告，纯靠踩。
+`const chart = ref()` 看起来人畜无害，但 Vue 3 的 `ref` 会深度递归代理对象——echarts 实例内部有大量私有状态和 canvas 引用，被 Proxy 包一层之后轻则无谓的性能开销（每次内部访问都走一遍代理），重则行为异常（一些内部逻辑用对象引用做 WeakMap key，被代理后取不到）。`shallowRef` 只代理 `.value` 这一层，实例本体原样透传。同类的正确姿势还有给实例套 `markRaw`。这个坑我当年排查了一下午，它不报错、不警告，纯靠踩。
 
 ### ResizeObserver：侧边栏折叠才是 resize 的盲区
 
-绝大多数示例代码用 `window.addEventListener('resize', ...)`，但中后台的真实布局变化有一半不触发 window resize：**侧边栏折叠、分栏拖拽、卡片收起展开**——窗口没变，是容器变了。`ResizeObserver` 监听的是容器元素本身，这些场景全能覆盖。挂载时 `observe`，卸载时 `disconnect`，一个不漏。唯一要注意它是观察内层 `chartRef`，而内层宽高 100% 跟随外层，所以外层布局怎么变都能捕捉到。
+绝大多数示例代码用 `window.addEventListener('resize', ...)`，但中后台的真实布局变化有一半不触发 window resize：侧边栏折叠、分栏拖拽、卡片收起展开——窗口没变，是容器变了。`ResizeObserver` 监听的是容器元素本身，这些场景全能覆盖。挂载时 `observe`，卸载时 `disconnect`，一个不漏。唯一要注意它是观察内层 `chartRef`，而内层宽高 100% 跟随外层，所以外层布局怎么变都能捕捉到。
 
 ### notMerge 默认 true：options 是唯一数据源
 
-`setOption` 默认是**合并模式**——新配置和旧配置按 key 合并。听起来贴心，实际是状态漂移的温床：把 series 从两条改成一条，旧的第二条还在；删掉的 `markLine` 残留半年；切换图表类型时旧系列的旧样式混进来。合并模式适合「手把手增量更新」的心智，而本组件的设计是「`options` 是唯一数据源」——组件无状态，渲染结果永远等于当前 options，**整图替换**才是最可预期的语义。
+`setOption` 默认是合并模式——新配置和旧配置按 key 合并。听起来贴心，实际是状态漂移的温床：把 series 从两条改成一条，旧的第二条还在；删掉的 `markLine` 残留半年；切换图表类型时旧系列的旧样式混进来。合并模式适合「手把手增量更新」的心智，而本组件的设计是「`options` 是唯一数据源」——组件无状态，渲染结果永远等于当前 options，整图替换才是最可预期的语义。
 
 代价也要说清楚：`notMerge: true` 会重置交互状态，比如 dataZoom 缩放位置、图例开关状态会在每次 options 更新后回到配置值。需要「数据更新但交互状态保留」的场景（如实时推送的监控图），传 `:notMerge="false"` 即可——语义收在 prop 上，两种心智都有出口。
 
@@ -276,7 +276,7 @@ defineExpose({
 
 `onUnmounted` 里 `disconnect + dispose` 是防止内存泄漏的标配，漏了 dispose，canvas、事件监听、定时器全套留在内存里，页面来回切几次堆就上去了。
 
-keep-alive 是额外加分项：缓存的页面切回来时**组件不会重新 mount**，但容器尺寸可能已经变了（别的页面动过布局），`onActivated` 里补一次 `resize`，图不会以旧尺寸定格。
+keep-alive 是额外加分项：缓存的页面切回来时组件不会重新 mount，但容器尺寸可能已经变了（别的页面动过布局），`onActivated` 里补一次 `resize`，图不会以旧尺寸定格。
 
 ### 事件白名单透传
 
@@ -382,10 +382,10 @@ onMounted(getDashboard)
 
 四个实践模式：
 
-1. **数据变了就重新生成整个 options，不要去 patch 深层字段。** `buildTrendOption` 每次从原始数据全量构建配置——虽然组件的 deep watch 能感知深层修改，但「原始数据 → 纯函数 → options」的单向流更好排查：图不对就查 options 对不对，options 对就查数据对不对，没有中间态。
-2. **切图表类型零成本。** `bar` ↔ `line` 切换只是 `series[].type` 换个字符串重新生成 options，`notMerge: true` 保证旧系列的样式、多余的配置全部被替换干净，不会有「折线图里残留柱状图 markPoint」的灵异事件。这就是「什么类型都能复用」的机理：**类型不是组件的参数，是 options 的参数**。
-3. **空态是显式的。** 接口空数据时 `isEmpty` 一开，遮罩盖住的是一张被 `clear()` 掉的空图，而不是画着一个孤零零坐标轴的「假图表」。
-4. **escape hatch 常备。** 导出图片这种组件没封装的能力，`getInstance()` 一步直达：
+1. 数据变了就重新生成整个 options，不要去 patch 深层字段。`buildTrendOption` 每次从原始数据全量构建配置——虽然组件的 deep watch 能感知深层修改，但「原始数据 → 纯函数 → options」的单向流更好排查：图不对就查 options 对不对，options 对就查数据对不对，没有中间态。
+2. 切图表类型零成本。`bar` ↔ `line` 切换只是 `series[].type` 换个字符串重新生成 options，`notMerge: true` 保证旧系列的样式、多余的配置全部被替换干净，不会有「折线图里残留柱状图 markPoint」的灵异事件。这就是「什么类型都能复用」的机理：类型不是组件的参数，是 options 的参数。
+3. 空态是显式的。接口空数据时 `isEmpty` 一开，遮罩盖住的是一张被 `clear()` 掉的空图，而不是画着一个孤零零坐标轴的「假图表」。
+4. escape hatch 常备。导出图片这种组件没封装的能力，`getInstance()` 一步直达：
 
 ```ts
 const exportPng = () => {
@@ -447,8 +447,8 @@ export default echarts
 
 组件里只需把 `import * as echarts from 'echarts'` 换成 `import echarts from '@/plugins/echarts'`，其余代码原样工作。两个附带收益：
 
-- **体积可控**：按项目实际用到的图表裁剪，gzip 体积一般能省下一半以上；
-- **`ECOption` 比 `EChartsOption` 更严**：`EChartsOption` 是全量类型的并集，拼错字段不一定报错；`ComposeOption` 组装出来的类型只认注册过的东西，没用 `RadarChart` 却写 `type: 'radar'` 会直接类型报错——没用 TS 白板的原因之一。
+- 体积可控：按项目实际用到的图表裁剪，gzip 体积一般能省下一半以上；
+- `ECOption` 比 `EChartsOption` 更严：`EChartsOption` 是全量类型的并集，拼错字段不一定报错；`ComposeOption` 组装出来的类型只认注册过的东西，没用 `RadarChart` 却写 `type: 'radar'` 会直接类型报错——没用 TS 白板的原因之一。
 
 ## 六、设计复盘：好的与该改的
 
@@ -477,4 +477,4 @@ onUnmounted dispose                   loading / 空态 / 主题全是 prop
 每张图 ~40 行样板 + 一堆坑            0 行样板，坑在组件里修一次
 ```
 
-**一句话记住**：图表组件封装的本质是把 **echarts 的生命周期**（init / setOption / resize / dispose）收进组件，把**图表长什么样**全部交给 options——类型只是 `options.series[].type` 的一个字符串，所以组件天然是全类型复用的；判断封装好坏的标准就一条：使用者是否只需要关心 options，其余一切（包括 `getInstance()` 这种后门）都有明确出口。
+回头看，这次封装做的事情其实就两件：把 echarts 的生命周期（init / setOption / resize / dispose）收进组件，把图表长什么样全部交给 options。类型只是 `options.series[].type` 的一个字符串，所以组件天然是全类型复用的。判断封装好坏的标准就一条：使用者是否只需要关心 options，其余一切（包括 `getInstance()` 这种后门）都有明确出口。

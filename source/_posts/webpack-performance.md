@@ -1,7 +1,7 @@
 ---
 title: Webpack 性能优化速查：构建速度与产物体积，一张表讲完
 date: 2026-09-09 22:30:00
-description: Webpack 优化只围绕两件事——构建速度（开发体验）和产物体积（用户首屏）。不铺原理，只留结论：每条优化给「一句话为什么 + 最小配置」，按收益/成本排序，最后汇总成一张速查表。以 webpack5 为准，webpack4 差异单独标注。
+description: Webpack 优化只围绕两件事——构建速度（开发体验）和产物体积（用户首屏）。不铺原理，只留结论：每条优化给「为什么 + 最小配置」，按收益/成本排序，最后汇总成一张速查表。以 webpack5 为准，webpack4 差异单独标注。
 categories:
   - [前端工程化, webpack]
 tags:
@@ -17,7 +17,7 @@ Webpack 的优化手段几十条，但目标只有两个：
 产物体积  → 优化的是用户首屏（下载多少 JS 才能看）
 ```
 
-本文不铺原理，每条只留**结论 + 最小配置**，按「收益 / 成本」排序。以 webpack5 为准，webpack4 的差异随文标注。
+本文不铺原理，每条只留结论 + 最小配置，按「收益 / 成本」排序。以 webpack5 为准，webpack4 的差异随文标注。
 
 ---
 
@@ -46,7 +46,7 @@ const SpeedMeasurePlugin = require('speed-measure-webpack-plugin')
 cache: { type: 'filesystem' }   // webpack5 默认开发环境已开启
 ```
 
-二次构建从分钟级降到秒级。**webpack4 对应物**：`babel-loader` 的 `cacheDirectory: true`、`cache-loader`、以及已过时的 DllPlugin——webpack5 一个配置全部替代。
+二次构建从分钟级降到秒级。webpack4 对应物：`babel-loader` 的 `cacheDirectory: true`、`cache-loader`、以及已过时的 DllPlugin——webpack5 一个配置全部替代。
 
 ### 2. 别让 loader 碰 node_modules
 
@@ -118,7 +118,7 @@ devtool：开发环境用 'eval-cheap-module-source-map'，
 const Home = () => import(/* webpackChunkName: "home" */ './views/Home.vue')
 ```
 
-首屏只加载首屏的代码，其他页面按需。SPA 不做这一条，谈别的都是细节。
+首屏只加载首屏的代码，其他页面按需。SPA 不做这一条，谈别的都是细节。其实这条很多人都知道，但真实项目里还是有大量路由一把全量 import 的——值得先自查一遍。
 
 ### 3. splitChunks 拆公共依赖
 
@@ -145,7 +145,7 @@ optimization: {
 externals: { vue: 'Vue', echarts: 'echarts' }   // 打包时排除，运行时读全局变量
 ```
 
-权衡：externals 会**失去 tree shaking 和版本锁定**，只适合"确实用得多且稳定"的大库；偶尔用的库老老实实打包。
+权衡：externals 会失去 tree shaking 和版本锁定，只适合"确实用得多且稳定"的大库；偶尔用的库老老实实打包。
 
 ### 5. 传输压缩：gzip / brotli
 
@@ -210,7 +210,6 @@ optimization: { runtimeChunk: 'single' }
 ```
 
 改业务代码时，`vendors.js` 的 hash 纹丝不动，用户不用重新下载几百 KB 依赖——这是长效缓存真正生效的前提。
-
 ### 3. 资源提示：preload / prefetch
 
 ```javascript
@@ -218,7 +217,7 @@ import(/* webpackPreload: true */ './critical-module')   // 与主包并行，�
 import(/* webpackPrefetch: true */ './next-page')        // 浏览器空闲时偷偷加载下一页
 ```
 
-一句话区分：**preload 给当前导航，prefetch 给下一步操作**。滥用 prefetch 会浪费用户流量。
+两者这么区分：preload 给当前导航，prefetch 给下一步操作。滥用 prefetch 会浪费用户流量。
 
 ### 4. 分包不是越细越好
 
@@ -242,5 +241,4 @@ HTTP/2 下请求数不再昂贵，但每个 chunk 有压缩下限和请求开销
 | 体积 | 依赖瘦身 | 按需引入 / dayjs / 去重 | 最容易被忽略的大头 |
 | 加载 | 长效缓存 | `contenthash` + `runtimeChunk: 'single'` | 两者配套才生效 |
 | 加载 | 资源提示 | `webpackPreload/Prefetch` | preload 给当前页，prefetch 给下一页 |
-
-**落地的顺序**：先上 analyzer 看数据 → 构建侧做缓存 + 范围（几乎零成本）→ 体积侧做懒加载 + tree shaking + 依赖瘦身 → 最后补 hash 缓存与资源提示。对绝大多数项目，做完这张表就够了，剩下的交给 CDN 和 HTTP/2。
+**落地的顺序**：先上 analyzer 看数据 → 构建侧做缓存 + 范围（几乎零成本）→ 体积侧做懒加载 + tree shaking + 依赖瘦身 → 最后补 hash 缓存与资源提示。对绝大多数项目，做完这张表就够了，剩下的交给 CDN 和 HTTP/2。个人经验是别贪多，一次上一两条，跑一周确认无回归再继续——优化最怕一次改太多，出了问题都不知道是哪条引起的。

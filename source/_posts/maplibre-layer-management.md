@@ -13,13 +13,13 @@ tags:
 
 最近在一个数据可视化大屏项目里负责地图模块，需求乍看很朴素：左侧一棵图层树，勾选哪类设施，地图上就渲染哪类要素。但做下去发现坑一个接一个：
 
-- 设施有**几十类**，点、线、面混杂，样式（颜色/图标/线宽）全部由后端配置下发，前端写死不可能；
-- 矢量瓦片是**异步加载**的，「瓦片里到底有哪些要素类型」要等加载完才知道——直接等它，图层会白屏好几百毫秒；
-- 大面积面要素挂图标，放大后**每个瓦片上都长出一个重复图标**；
-- 一切换底图样式，所有业务图层**集体消失**（MapLibre 的 `setStyle` 会重置整个样式）；
-- 把 MapLibre 实例塞进 Vue 的 `ref`，地图**随机报错**，内部数据结构被 Proxy 拆得面目全非。
+- 设施有几十类，点、线、面混杂，样式（颜色/图标/线宽）全部由后端配置下发，前端写死不可能；
+- 矢量瓦片是异步加载的，「瓦片里到底有哪些要素类型」要等加载完才知道——直接等它，图层会白屏好几百毫秒；
+- 大面积面要素挂图标，放大后每个瓦片上都长出一个重复图标；
+- 一切换底图样式，所有业务图层集体消失（MapLibre 的 `setStyle` 会重置整个样式）；
+- 把 MapLibre 实例塞进 Vue 的 `ref`，地图随机报错，内部数据结构被 Proxy 拆得面目全非。
 
-这篇文章把这些问题的解法按主题拆开讲清楚。技术栈是 **Vue 3 + Pinia + MapLibre GL（配 PMTiles 协议）**，但思路对任何 WebGL 地图引擎（Mapbox GL / MapLibre / 高性能 Canvas 地图）都通用。
+这篇文章把这些问题的解法按主题拆开讲清楚。技术栈是 Vue 3 + Pinia + MapLibre GL（配 PMTiles 协议），但思路对任何 WebGL 地图引擎（Mapbox GL / MapLibre / 高性能 Canvas 地图）都通用。
 
 <!-- more -->
 
@@ -27,7 +27,7 @@ tags:
 
 先回答一个设计问题：几十种图层，要不要抽象一个 `BaseLayer` 基类，子类重写 `addToMap` / `removeFromMap`？
 
-我们的答案是不写 class 继承，而是把图层系统拆成**职责单一的工厂函数**，在 Pinia setup store 里组合：
+我们的答案是不写 class 继承，而是把图层系统拆成职责单一的工厂函数，在 Pinia setup store 里组合：
 
 ```text
 useLayerStore (图层主 Store)
@@ -39,7 +39,7 @@ useLayerStore (图层主 Store)
  └── searchFilter = createKeywordFilter()  关键词过滤（纯函数）
 ```
 
-`createMapLayers` 通过**依赖注入**拿到它需要的东西，而不是自己 `import` store——这让它可以独立单测：
+`createMapLayers` 通过依赖注入拿到它需要的东西，而不是自己 `import` store——这让它可以独立单测：
 
 ```ts
 const mapOps = createMapLayers({
@@ -53,7 +53,7 @@ const mapOps = createMapLayers({
 })
 ```
 
-选择组合而非继承的理由很实际：图层系统的变化维度是「样式解析 / 持久化 / 地图操作 / 过滤」四个**正交方向**，继承树只能沿一条轴展开，最终必然长出 `BaseLayer → VectorLayer → StyledVectorLayer` 这种每次改样式都要动基类的结构。组合模式下每个工厂只对自己的 Map 负责，核心纯函数（瓦片 URL 解析、排序合并）还能直接跑单测。
+选择组合而非继承的理由很实际：图层系统的变化维度是「样式解析 / 持久化 / 地图操作 / 过滤」四个正交方向，继承树只能沿一条轴展开，最终必然长出 `BaseLayer → VectorLayer → StyledVectorLayer` 这种每次改样式都要动基类的结构。组合模式下每个工厂只对自己的 Map 负责，核心纯函数（瓦片 URL 解析、排序合并）还能直接跑单测。
 
 ## 二、数据模型：一棵树跑通 UI 和地图两个世界
 
@@ -75,7 +75,7 @@ export interface LayerNode {
 }
 ```
 
-关键设计是那几个下划线开头的**运行时绑定字段**：一棵树同时服务图层面板（勾选、搜索、计数）和地图（真正的 layer ID 列表）。「用户勾选的是树节点，地图操作的是 layer ID」这层映射关系就收在节点自己身上，不用再维护一张 id 映射表。
+关键设计是那几个下划线开头的运行时绑定字段：一棵树同时服务图层面板（勾选、搜索、计数）和地图（真正的 layer ID 列表）。「用户勾选的是树节点，地图操作的是 layer ID」这层映射关系就收在节点自己身上，不用另维护一张 id 映射表，这一点我后来才发现省了多少事。
 
 瓦片协议上同时支持两种源，按后端下发的字段自动分流：
 
@@ -105,7 +105,7 @@ export async function ensurePmtilesProtocol(maplibre: typeof maplibregl) {
 
 几十类设施样式由后端「全局样式配置」下发，结构大致是 `Record<typeKey, 样式规则[]>`——key 是瓦片要素 `properties.type` 的值（比如 `transformer_station`），值是渲染规则（`code` 决定渲染成点/线/面，`config` 决定颜色图标线宽）。
 
-拿到配置后先**预编译**成 MapLibre 的 layer spec（`createStyleCache` 的职责）：point + 图标 → symbol 图层、point 无图标 → circle、line → line、polygon → fill + 边界线 outline，同时把 SVG 图标预渲染成 `ImageData` 备用。渲染时按 typeKey 建**带 filter 的独立图层**：
+拿到配置后先预编译成 MapLibre 的 layer spec（`createStyleCache` 的职责）：point + 图标 → symbol 图层、point 无图标 → circle、line → line、polygon → fill + 边界线 outline，同时把 SVG 图标预渲染成 `ImageData` 备用。渲染时按 typeKey 建带 filter 的独立图层：
 
 ```ts
 for (const [typeKey, entries] of styleCache) {
@@ -116,14 +116,14 @@ for (const [typeKey, entries] of styleCache) {
 }
 ```
 
-图层 ID 用 `${nodeId}__${typeKey}` 这样的命名约定串起来，一个设施图层勾选后实际产生的所有 layer（多条样式、面边界线 `-outline`、质心 `_centroid`）都能靠前缀反查回来——后面处理显隐、排序、销毁时全靠这份「户口」。
+图层 ID 用 `${nodeId}__${typeKey}` 这样的命名约定串起来，一个设施图层勾选后实际产生的所有 layer（多条样式、面边界线 `-outline`、质心 `_centroid`）都能靠前缀反查回来——后面处理显隐、排序、销毁时全靠这份清单。
 
 ## 四、两阶段渲染：先上菜，再校菜
 
-这是整个模块里最值得写的一笔。矛盾在于：
+这是整个模块里我自己最满意的一笔。矛盾在于：
 
-- 瓦片是**按需异步加载**的，`addSource` 之后要等一会儿才能查到里面的要素；
-- 但样式缓存的 key 集合我们是**预先知道**的（全局样式配置就摆在那）；
+- 瓦片是按需异步加载的，`addSource` 之后要等一会儿才能查到里面的要素；
+- 但样式缓存的 key 集合我们是预先知道的（全局样式配置就摆在那）；
 - 用户勾选图层后盯着地图等，白屏超过几百毫秒体验就很差。
 
 方案是两阶段：
@@ -138,7 +138,7 @@ Phase 2（后台精炼，requestIdleCallback）
   与缓存假设 diff：一致 → 什么都不做；不一致 → 拆掉重建
 ```
 
-探测用 `map.querySourceFeatures` 轮询，带**指数退避**和超时兜底：
+探测用 `map.querySourceFeatures` 轮询，带指数退避和超时兜底：
 
 ```ts
 const MAX_ATTEMPTS = 10
@@ -162,19 +162,19 @@ const tryCollect = () => {
 }
 ```
 
-精炼阶段的 diff 逻辑克制到「多一步都不做」：类型集合一致、几何类型与渲染 code 匹配（`GEOM_TO_CODE` 映射：`Point → {point, circle}`、`Polygon → {polygon, fill}`）、且渲染图层确实有要素命中——三条全过就**不重建**，避免无谓的移除/重加造成闪烁。
+精炼阶段的 diff 逻辑克制到「多一步都不做」：类型集合一致、几何类型与渲染 code 匹配（`GEOM_TO_CODE` 映射：`Point → {point, circle}`、`Polygon → {polygon, fill}`）、且渲染图层确实有要素命中——三条全过就不重建，避免无谓的移除/重加造成闪烁。
 
-这个模式的本质是把「**乐观渲染 + 后台校验**」搬到了地图场景：与其等真相出来再画，不如先按最可信的假设画出来，真相到了只在偏差时纠正。类似的思路在离线优先的编辑器、React 的并发渲染里都能看到影子。
+这个模式的本质是把「乐观渲染 + 后台校验」搬到了地图场景：与其等真相出来再画，不如先按最可信的假设画出来，真相到了只在有偏差时纠正。类似的思路在离线优先的编辑器、React 的并发渲染里都能看到影子。
 
 ## 五、面要素的图标重复：质心图层方案
 
-面要素（比如一片行政区、一个园区）想标注图标，直接在 vector source 上加 symbol 图层会踩坑：**MapLibre 会在每个包含该要素的瓦片里各放一个图标**。低缩放时一个瓦片能罩住整个面，看不出来；一放大，面横跨 6 个瓦片，图标就排成了 6 个。
+面要素（比如一片行政区、一个园区）想标注图标，直接在 vector source 上加 symbol 图层会踩坑：MapLibre 会在每个包含该要素的瓦片里各放一个图标。低缩放时一个瓦片能罩住整个面，看不出来；一放大，面横跨 6 个瓦片，图标就排成了 6 个。
 
-解法是把图标从瓦片渲染里拿出来，放到**独立 GeoJSON source** 上：
+解法是把图标从瓦片渲染里拿出来，放到独立的 GeoJSON source 上：
 
-1. `querySourceFeatures` 取出面要素几何，计算每个面的**质心**（外环顶点坐标平均）；
+1. `querySourceFeatures` 取出面要素几何，计算每个面的质心（外环顶点坐标平均）；
 2. 质心点写进独立的 GeoJSON source，symbol 图层挂在质心 source 上——一个面永远只有一个图标；
-3. 监听 `sourcedata` 事件，**新瓦片到达时增量补充**新出现的面质心（150ms 防抖，`seenIds` 集合去重）。
+3. 监听 `sourcedata` 事件，新瓦片到达时增量补充新出现的面质心（150ms 防抖，`seenIds` 集合去重）。
 
 ```ts
 map.on('sourcedata', (e) => {
@@ -187,7 +187,7 @@ map.on('sourcedata', (e) => {
 
 ### 显隐：隐藏不销毁
 
-取消勾选只把图层 `visibility` 设为 `none`，**source 原地保留**：
+取消勾选只把图层 `visibility` 设为 `none`，source 原地保留：
 
 ```ts
 function setLayerVisibility(map, layerIds, visible) {
@@ -201,7 +201,7 @@ function setLayerVisibility(map, layerIds, visible) {
 
 ### 叠放：MapLibre 没有 z-index
 
-WebGL 地图的图层顺序 = **addLayer 的先后顺序**，想调整只有 `map.moveLayer(id)`（不传第二个参数即置顶）一条路。我们的设施叠放顺序是后端下发的全局配置（`orderIds[0]` = 最上层），应用方式是「**从最底层开始逐个置顶**」：
+WebGL 地图的图层顺序就是 addLayer 的先后顺序，想调整只有 `map.moveLayer(id)`（不传第二个参数即置顶）一条路。我们的设施叠放顺序是后端下发的全局配置（`orderIds[0]` = 最上层），应用方式是「从最底层开始逐个置顶」：
 
 ```ts
 function applyFacilityOrderToMap(map) {
@@ -214,13 +214,13 @@ function applyFacilityOrderToMap(map) {
 }
 ```
 
-坑在于图层是**异步**创建的——两阶段渲染的 Phase 2 可能随时重建图层，质心层还会延迟 200ms 追加，每次都会破坏顺序。所以所有会新增图层的路径末尾统一调一个 **50ms 防抖的重排**，保证最终状态收敛到全局排序。
+坑在于图层是异步创建的——两阶段渲染的 Phase 2 可能随时重建图层，质心层还会延迟 200ms 追加，每次都会破坏顺序。所以所有会新增图层的路径末尾统一调一个 50ms 防抖的重排，保证最终状态收敛到全局排序。
 
 ### 透明度：别覆盖样式默认值
 
 面图层样式里常写着 `fill-opacity: 0.25` 这种「设计师调好的半透明」。如果用户拖滑块设 0.8，直接 `setPaintProperty(0.8)` 就把原设计覆盖了；再拖回 1.0，图变成实心——原始基准丢了。
 
-解法是**基准透明度缓存**：首次读某图层时把它的原始 opacity 记下来，之后永远写 `userOpacity × base`：
+解法是基准透明度缓存：首次读某图层时把它的原始 opacity 记下来，之后永远写 `userOpacity × base`：
 
 ```ts
 const _baseOpacityCache = new Map<string, number>()
@@ -236,7 +236,7 @@ function applyOpacity(map, layerId, userOpacity) {
 
 ## 七、Vue 与地图实例的相处：markRaw + toRaw
 
-MapLibre 的 Map 实例内部有大量 `Set`/`Map` 和 WebGL 资源。放进 Vue 的 `ref` 会被 **深度 Proxy 代理**，读写属性都过一遍 Proxy，轻则性能劣化，重则 MapLibre 内部依赖引用相等性的逻辑直接失效（Proxy 包装后的对象 `!==` 原对象）。
+MapLibre 的 Map 实例内部有大量 `Set`/`Map` 和 WebGL 资源。放进 Vue 的 `ref` 会被深度 Proxy 代理，读写属性都过一遍 Proxy，轻则性能劣化，重则 MapLibre 内部依赖引用相等性的逻辑直接失效（Proxy 包装后的对象 `!==` 原对象）。
 
 处理三件套：
 
@@ -254,11 +254,11 @@ const map = toRaw(mapInstance.value)
 renderNodeLayers(map, toRaw(node))
 ```
 
-一句话记住：**地图实例和一切会进地图 API 的对象，都要待在响应式系统之外**。真的需要响应式的（中心点、缩放级别），单独用基本类型 ref 同步一份。
+这里踩坑之后的经验是：地图实例和一切会进地图 API 的对象，都要待在响应式系统之外。真的需要响应式的（中心点、缩放级别），单独用基本类型 ref 同步一份。
 
 ## 八、底图切换：setStyle 是一次「大清洗」
 
-`map.setStyle(newStyle)` 会**替换整个样式**，所有手动 `addLayer/addSource` 的业务图层全部蒸发。正确姿势是把它当成一次受控的销毁重建：
+`map.setStyle(newStyle)` 会替换整个样式，所有手动 `addLayer/addSource` 的业务图层全部蒸发。正确姿势是把它当成一次受控的销毁重建：
 
 ```ts
 function switchMapStyle(map, styleId) {
@@ -306,4 +306,4 @@ function switchMapStyle(map, styleId) {
 | 切底图业务图层全丢 | setStyle 重置整个样式 | 主动清除 → diff 切换 → style.load 后恢复 |
 | 地图实例放 ref 随机报错 | 深度 Proxy 破坏内部结构 | shallowRef + markRaw + toRaw 三件套 |
 
-**一句话记住**：大屏图层管理的核心不是「往地图上加图层」，而是管理**树节点与 MapLibre layer 之间的映射**——渲染可以乐观、校验放后台，但每个 layer 的出生（ID 命名）、户籍（`_mapLayerIds`）、销毁（source 保留策略）都必须在掌控之中。
+回头看整套方案，大屏图层管理的核心其实不是「往地图上加图层」，而是管理树节点与 MapLibre layer 之间的映射——渲染可以乐观、校验放后台，但每个 layer 的出生（ID 命名）、户籍（`_mapLayerIds`）、销毁（source 保留策略）都必须在掌控之中。

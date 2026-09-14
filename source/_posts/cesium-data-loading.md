@@ -11,7 +11,7 @@ tags:
   - Vite
 ---
 
-> 这篇文章不是 Cesium 入门教程，而是一次真实项目的落地复盘。最近负责的 Vue3 + Vite 项目里有一块三维地图：CesiumJS 1.123，渲染几十类基础设施（变电站、发电厂、线路……）的点线面数据，支持视口内动态加载、拓扑流动网络、实时事件告警。网上 Cesium 教程大多停留在「new 一个 Viewer + GeoJsonDataSource.load 一个文件」，而真实项目里你要回答的问题其实是：**内网离线环境怎么跑、几万个实体怎么不卡、拖动地图时数据怎么增量进出、内存怎么不涨爆**。本文按数据流动的顺序，把这条链路从头到尾拆开讲。所有代码都来自这个真实项目，文末附完整文件地图。
+> 这篇文章不讲 Cesium 入门，算是一次真实项目的落地复盘。最近负责的 Vue3 + Vite 项目里有一块三维地图：CesiumJS 1.123，渲染几十类基础设施（变电站、发电厂、线路……）的点线面数据，支持视口内动态加载、拓扑流动网络、实时事件告警。网上 Cesium 教程大多停留在「new 一个 Viewer + GeoJsonDataSource.load 一个文件」，而真实项目里你要回答的问题其实是：内网离线环境怎么跑、几万个实体怎么不卡、拖动地图时数据怎么增量进出、内存怎么不涨爆。本文按数据流动的顺序，把这条链路从头到尾拆开讲。所有代码都来自这个真实项目，文末附完整文件地图。
 
 ## 目录
 
@@ -29,7 +29,7 @@ tags:
 
 ## 0. 前言：一个真实的 Cesium 项目长什么样
 
-先交代背景。项目是一个基础设施三维地图应用：Vue 3.3 + Vite 6 + Pinia 3 + CesiumJS 1.123，部署在**内网离线环境**——这个前提直接决定了后面很多技术选型：不能用 Cesium Ion 的在线资产、不能依赖任何公网瓦片服务、后端接口返回的是**带坐标数组的业务 JSON 而不是标准 GeoJSON 文件**。
+先交代背景。项目是一个基础设施三维地图应用：Vue 3.3 + Vite 6 + Pinia 3 + CesiumJS 1.123，部署在内网离线环境——这个前提直接决定了后面很多技术选型：不能用 Cesium Ion 的在线资产、不能依赖任何公网瓦片服务、后端接口返回的是带坐标数组的业务 JSON，不是标准的 GeoJSON 文件。
 
 数据的流动方向可以用一张图概括，后文所有章节都是对这张图的展开：
 
@@ -63,7 +63,7 @@ tags:
 └─────────────────────────────────────────────────────────┘
 ```
 
-一个值得先说结论的事：这个项目**没有用**地形（`CesiumTerrainProvider`）、**没有用** 3D Tiles、**没有用** `GeoJsonDataSource`，也没有 CZML/KML。不是不会用，而是数据形态和性能要求决定了「后端 JSON + Primitive API」这条更底层的路线。第 4 节会讲清楚为什么。
+有件事先交代一下：这个项目没有用地形（`CesiumTerrainProvider`）、没有用 3D Tiles、没有用 `GeoJsonDataSource`，也没有 CZML/KML。倒不是不会用，主要是数据形态和性能要求决定了走「后端 JSON + Primitive API」这条更底层的路线。第 4 节会讲清楚为什么。
 
 <a id="sec1"></a>
 
@@ -71,16 +71,16 @@ tags:
 
 ### 1.1 常规路线的问题
 
-Cesium 官方推荐的 npm 接入是 `npm i cesium` + 打包插件（`vite-plugin-cesium` 或 Vite 官方文档里 copy-webpack-plugin / vite-plugin-static-copy 那套）。但 Cesium 的构建产物非常特殊：`Build/Cesium/` 下除了一个 3MB+ 的 `Cesium.js`，还有 **Workers、Assets、Widgets、ThirdParty 四个静态目录**，运行时按需加载，一个都不能少。这带来两个痛点：
+Cesium 官方推荐的 npm 接入是 `npm i cesium` + 打包插件（`vite-plugin-cesium` 或 Vite 官方文档里 copy-webpack-plugin / vite-plugin-static-copy 那套）。但 Cesium 的构建产物非常特殊：`Build/Cesium/` 下除了一个 3MB+ 的 `Cesium.js`，还有 Workers、Assets、Widgets、ThirdParty 四个静态目录，运行时按需加载，一个都不能少。这带来两个痛点：
 
 - 构建器要处理的文件数量暴涨（Workers 目录下几百个文件），dev 冷启动和 HMR 都会被拖慢；
 - 每次构建都要复制一遍静态资源，CI 时间和 `dist` 体积都难看。
 
-而 `vite-plugin-cesium` 的原理说穿了也很朴素：**把 node_modules 里的构建产物复制到输出目录 + external 掉 cesium 包**。既然如此，不如直接自己来。
+而 `vite-plugin-cesium` 的原理说穿了也很朴素：把 node_modules 里的构建产物复制到输出目录，再把 cesium 包 external 掉。既然如此，不如直接自己来。
 
 ### 1.2 项目的做法：public 目录 + 全局变量
 
-项目的 `package.json` 里**没有 cesium 依赖**（node_modules 里那份只是为了取构建产物），只留了一个复制脚本：
+项目的 `package.json` 里没有 cesium 依赖（node_modules 里那份只是为了取构建产物），只留了一个复制脚本：
 
 ```json
 {
@@ -103,7 +103,7 @@ Cesium 官方推荐的 npm 接入是 `npm i cesium` + 打包插件（`vite-plugi
 这两行 script 各有分工：
 
 - `/cesium/Cesium.js` 把整个库挂到全局变量 `window.Cesium` 上；
-- `/config.js` 是**运行时配置**，往 `window.baseConfig` 上写后端地址、图层列表、初始相机视角、token——部署后改这一个文件就能换环境，不用重新构建。对内网项目来说这比任何环境变量方案都直观。
+- `/config.js` 是运行时配置，往 `window.baseConfig` 上写后端地址、图层列表、初始相机视角、token——部署后改这一个文件就能换环境，不用重新构建。对内网项目来说这比任何环境变量方案都直观。
 
 代价是失去了 ESM 导入，所以补一个全局类型声明文件 `global.d.ts`（记得在 `tsconfig.json` 的 `include` 里加上它）：
 
@@ -124,7 +124,7 @@ declare global {
 }
 ```
 
-注意第一行 `import type * as Cesium from 'cesium'`——类型可以继续用 npm 包的（devDependencies 里装着，只参与类型检查不参与打包），运行时用的才是 `window.Cesium`。**类型走 npm，运行走全局**，两头的好处都占了。
+注意第一行 `import type * as Cesium from 'cesium'`——类型可以继续用 npm 包的（devDependencies 里装着，只参与类型检查不参与打包），运行时用的才是 `window.Cesium`。类型走 npm，运行走全局，两头的好处都占了。
 
 ### 1.3 vite.config.ts 里必须加的三个配置
 
@@ -154,7 +154,7 @@ export default defineConfig({
 
 ## 2. Viewer 初始化：先拿到一个"干净"的球
 
-`new Cesium.Viewer()` 默认给你的不是一个空球，而是一个"全家桶"：时间轴、动画控件、Ion 默认影像、地理编码搜索框……在离线内网里，这些东西不仅多余，而且**每一个都在偷偷发请求**。所以初始化的第一原则是：全部关掉。
+`new Cesium.Viewer()` 默认给你的不是一个空球，而是一个"全家桶"：时间轴、动画控件、Ion 默认影像、地理编码搜索框……在离线内网里，这些东西不仅多余，而且每一个都在偷偷发请求。所以初始化的第一原则是：全部关掉。
 
 ```javascript
 // src/pages/home/components/cesium-map/cesiumMap.vue（有删减）
@@ -203,9 +203,9 @@ const initMap = () => {
 
 几个点单独说：
 
-**`Ion.defaultServer = 'undefined'`——字符串，不是值**。这是全项目最"邪门"也最有效的一行。`config.js` 里 `defaultPreventServer: 'undefined'`，赋给 `Ion.defaultServer` 后所有指向 `api.cesium.com` 的资产请求都变成了对 `undefined/...` 的请求，直接快速失败。内网环境没有外网，与其让每个请求等超时，不如让它们立刻死掉。配合 `imageryProvider: false`，球上是干干净净的椭球面——底图完全由我们自己的图层系统接管（第 3 节）。
+`Ion.defaultServer = 'undefined'`——注意是字符串，不是值 undefined。这是全项目最"邪门"也最有效的一行。`config.js` 里 `defaultPreventServer: 'undefined'`，赋给 `Ion.defaultServer` 后所有指向 `api.cesium.com` 的资产请求都变成了对 `undefined/...` 的请求，直接快速失败。内网环境没有外网，与其让每个请求等超时，不如让它们立刻死掉。配合 `imageryProvider: false`，球上是干干净净的椭球面——底图完全由我们自己的图层系统接管（第 3 节）。
 
-**初始视角全部配置化**。`config.js` 里：
+初始视角全部配置化，`config.js` 里：
 
 ```javascript
 cesiumCameraView: {
@@ -218,7 +218,7 @@ cesiumCameraView: {
 
 换部署区域只改这三个数字，不碰代码。
 
-**2D/3D 切换的视角适配**。保留了 `sceneModePicker`，但 2D 和 3D 需要的视野高度差着一个量级，所以用 `postRender` 监听场景模式变化，切完自动 `flyTo` 到各自的预设高度：
+2D/3D 切换还做了视角适配。保留了 `sceneModePicker`，但 2D 和 3D 需要的视野高度差着一个量级，所以用 `postRender` 监听场景模式变化，切完自动 `flyTo` 到各自的预设高度：
 
 ```javascript
 let lastMode = window.viewer.scene.mode;
@@ -232,7 +232,7 @@ window.viewer.scene.postRender.addEventListener(() => {
 });
 ```
 
-**`depthTestAgainstTerrain = false`**。教程里这句通常教你怎么开（配合地形），我们项目反过来是**显式关掉**：没有地形也没有 3D Tiles 时开启深度检测，实体的空间坐标反而会出现"消失/漂移"的诡异问题。没有地形，就别装作有地形。
+`depthTestAgainstTerrain = false`。教程里这句通常教你怎么开（配合地形），我们项目反过来是显式关掉：没有地形也没有 3D Tiles 时开启深度检测，实体的空间坐标反而会出现"消失/漂移"的诡异问题。没有地形，就别装作有地形。
 
 最后，初始化完成时广播一个自定义事件，让其它组件（图层管理、树组件）等到 viewer 就绪再干活：
 
@@ -248,7 +248,7 @@ onMounted(async () => {
 
 ## 3. 影像底图加载：配置驱动的多源图层
 
-底图的需求看起来简单，实际约束不少：要支持多种协议（内网自建瓦片的 XYZ、OGC 标准的 WMS/WMTS、ArcGIS 服务）、要能勾选开关、透明度亮度可调、层级可控、**用户勾选状态要记住**（下次打开还是上次的组合）、并且全部要配置化——实施人员改 `config.js` 就能加图层，不用发版。
+底图的需求看起来简单，实际约束不少：要支持多种协议（内网自建瓦片的 XYZ、OGC 标准的 WMS/WMTS、ArcGIS 服务）、要能勾选开关、透明度亮度可调、层级可控、用户勾选状态要记住（下次打开还是上次的组合）、并且全部要配置化——实施人员改 `config.js` 就能加图层，不用发版。
 
 ### 3.1 图层即配置
 
@@ -323,7 +323,7 @@ http://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}
 
 ### 3.3 添加、删除与排序
 
-图层管理的核心逻辑在头部组件里。添加时把配置里的 `display` 逐项应用到 `ImageryLayer` 上，并给图层实例**打两个私有标记**——这是整个模块的小机灵：
+图层管理的核心逻辑在头部组件里。添加时把配置里的 `display` 逐项应用到 `ImageryLayer` 上，并给图层实例打两个私有标记——这是整个模块里我个人比较得意的小设计：
 
 ```javascript
 // src/pages/home/components/home-header/index.vue（有删减）
@@ -343,8 +343,8 @@ const addLayer = (cfg: LayerConfig) => {
 };
 ```
 
-- **删除**：`removeLayer(id)` 倒序遍历 `imageryLayers`，按 `__layerId` 精确匹配后 `imageryLayers.remove(layer, true)`。Cesium 的图层对象没有业务 id，不打标记就只能按下标删，一排序就全乱。
-- **排序**：`imageryLayers` 是个栈式结构（越后添加越在上层），没有直接的 zIndex 概念。项目用两步模拟：先把所有带标记的图层 `lowerToBottom` 沉底，再按 zIndex 升序依次 `raiseToTop` 抬起——两轮循环后层级就是 zIndex 的顺序：
+- 删除：`removeLayer(id)` 倒序遍历 `imageryLayers`，按 `__layerId` 精确匹配后 `imageryLayers.remove(layer, true)`。Cesium 的图层对象没有业务 id，不打标记就只能按下标删，一排序就全乱。
+- 排序：`imageryLayers` 是个栈式结构（越后添加越在上层），没有直接的 zIndex 概念。项目用两步模拟：先把所有带标记的图层 `lowerToBottom` 沉底，再按 zIndex 升序依次 `raiseToTop` 抬起——两轮循环后层级就是 zIndex 的顺序：
 
 ```javascript
 const reorderLayersByZIndex = () => {
@@ -359,7 +359,7 @@ const reorderLayersByZIndex = () => {
 };
 ```
 
-- **持久化**：每次勾选变化，把整个图层配置数组（含最新的 `visible`）写进 `localStorage('layerConfig')`；页面初始化时优先读 localStorage、没有才用 `config.js` 的默认值。这里有个真实的坑，`config.js` 第一行注释就在警告它：**改了 config.js 的图层配置但浏览器没清缓存，是不会生效的**——localStorage 里的旧配置永远优先。
+- 持久化：每次勾选变化，把整个图层配置数组（含最新的 `visible`）写进 `localStorage('layerConfig')`；页面初始化时优先读 localStorage、没有才用 `config.js` 的默认值。这里有个真实的坑，`config.js` 第一行注释就在警告它：改了 config.js 的图层配置但浏览器没清缓存，是不会生效的——localStorage 里的旧配置永远优先。
 
 图层组件初始化同样要等 viewer：`onMounted` 时如果 `window.viewer` 已存在就直接加载，否则监听 `viewer-ready` 事件后再按 `visible: true` 的配置逐个 `addLayer`。
 
@@ -439,7 +439,7 @@ const cartographic = window.Cesium.Cartographic.fromCartesian(boundingSphere.cen
 
 ### 4.4 三种几何的 Primitive 工厂
 
-**点 → BillboardCollection**。点不用 Primitive，用 `BillboardCollection` 里的一条 billboard：图标 URL 来自后端样式接口（`baseApiUrl + style.image`），`disableDepthTestDistance: Number.POSITIVE_INFINITY` 让图标永远不被地形/其它几何裁剪——电力设施图标被山体挡住是不能接受的：
+**点 → BillboardCollection**。点不用 Primitive，用 `BillboardCollection` 里的一条 billboard：图标 URL 来自后端样式接口（`baseApiUrl + style.image`），`disableDepthTestDistance: Number.POSITIVE_INFINITY` 让图标不被地形/其它几何裁剪——电力设施图标被山体挡住是不能接受的：
 
 ```typescript
 // src/pages/home/composables/pointPrimitive.ts（有删减）
@@ -461,7 +461,7 @@ export const createPointPrimitive = (data: any, position: window.Cesium.Cartesia
 
 注意 `id` 字段被用来挂 `customAttributes`——Cesium 拾取（`scene.pick`）返回的对象会带上这个 id，业务数据就在这一刻"回到"前端手里。这是 Primitive 路线里传递业务上下文的标准手法。
 
-**面 → PolygonGeometry + EllipsoidSurfaceAppearance**。面创建完还要在中心点补一个 billboard 图标，并且和面建立**双向关联**（点图标 → `associatedPrimitive` 指回面，面 → `associatedBillboard` 指向图标），hover 图标时高亮整个面：
+**面 → PolygonGeometry + EllipsoidSurfaceAppearance**。面创建完还要在中心点补一个 billboard 图标，并且和面建立双向关联（点图标 → `associatedPrimitive` 指回面，面 → `associatedBillboard` 指向图标），hover 图标时高亮整个面：
 
 ```typescript
 // src/pages/home/composables/polygonPrimitive.ts（有删减）
@@ -509,7 +509,7 @@ const polyline = new window.Cesium.Primitive({
 (polyline as any).customAttributes = { ...data, defaultStyle }; // ✅ 保存默认样式用于恢复
 ```
 
-### 4.5 全局集合：实体的"户口"统一管理
+### 4.5 全局集合：实体的进出统一一个入口
 
 所有 primitive 进出两个全局集合，而不是直接 `scene.primitives.add()`。集合挂在 scene 上一次，之后只操作集合，销毁、清空、遍历都有唯一入口：
 
@@ -534,7 +534,7 @@ export function initCollections() {
 
 ## 5. 视口驱动的增量加载：只请求"看得见"的数据
 
-这一节是整个项目的核心。设施全量有几十万条，一次性上球既不现实也没必要——**用户看到什么，就加载什么**。
+这一节是整个项目的核心。设施全量有几十万条，一次性上球既不现实也没必要——用户看到什么，就加载什么。
 
 ### 5.1 触发时机：相机静止 400ms 后
 
@@ -595,7 +595,7 @@ get3DViewportBounds() {
 
 2D 分支除了同样的转换，还多两道修正：视口范围太小（< 30°）时以中心为准扩到 30°，太大（> 180°）时压回 180°——2D 模式下 `computeViewRectangle` 在极端缩放时会给出不合理的边界。
 
-**兜底方案**是按相机高度查表估一个范围（0.05° ~ 30° 共九档），当 `computeViewRectangle` 返回 undefined（相机朝天上、贴地等极端姿态）时顶上：
+兜底方案是按相机高度查表估一个范围（0.05° ~ 30° 共九档），当 `computeViewRectangle` 返回 undefined（相机朝天上、贴地等极端姿态）时顶上：
 
 ```typescript
 calculateViewportBoundsFallback() {
@@ -638,7 +638,7 @@ export const loadData = async () => {
 };
 ```
 
-### 5.4 增量 diff：不闪、不重、不漏
+### 5.4 增量 diff：只动真正变化的部分
 
 `loadDataAsPrimitives` 是整个管线里最精华的函数。它的前身有两个，都在源码注释里留着"尸体"，正好构成一部踩坑进化史：
 
@@ -705,7 +705,7 @@ for (const dataItem of value) {
 }
 ```
 
-效果：相机平移时，离开视口的实体被精准移除、新进入的实体被创建、视口内已有的实体**一个都不动**——没有闪烁，没有重复请求渲染，内存里也永远只有"看得见"的那批。
+效果：相机平移时，离开视口的实体被精准移除、新进入的实体被创建、视口内已有的实体一个都不动——没有闪烁，没有重复请求渲染，内存里也只有"看得见"的那批。
 
 ### 5.5 缓存治理：勾选、卸载与定时清理
 
@@ -725,7 +725,7 @@ export const startCleanupTask = () => {
 };
 ```
 
-这是典型的**空间换时间 + 延迟回收**：勾选切换是高频操作，5 分钟内恢复就免请求；长时间不用则彻底回收，内存不无限增长。
+这是典型的空间换时间加延迟回收：勾选切换是高频操作，5 分钟内恢复就免请求；长时间不用则彻底回收，内存不会无限增长。
 
 <a id="sec6"></a>
 
@@ -733,7 +733,7 @@ export const startCleanupTask = () => {
 
 ### 6.1 WebSocket 事件 → 呼吸图标
 
-后端通过 WebSocket 推送事件变更，前端收到任何消息都重新拉取"进行中事件列表"，把事件关联的设施渲染成**呼吸告警图标**：
+后端通过 WebSocket 推送事件变更，前端收到任何消息都重新拉取"进行中事件列表"，把事件关联的设施渲染成呼吸告警图标：
 
 ```typescript
 // src/pages/home/index.vue（有删减）
@@ -772,7 +772,7 @@ function startAnimation(billboardArray) {
 
 ### 6.2 拾取与高亮状态机
 
-`scene.pick` 拿到 primitive 后，样式状态由一个四态状态机管理：`normal / moveIn / click / rightclick`。悬停高亮、移出恢复、点击选中（保持高亮，右键取消）、右键弹菜单。线的样式切换因为 Primitive 不可变，走的是**销毁重建**：改线宽 = 用缓存的原坐标 + 新样式新建一个 GeometryInstance 替换旧的——这也是 Primitive 路线的代价之一，好在有 `defaultStyle` 快照，恢复不难。
+`scene.pick` 拿到 primitive 后，样式状态由一个四态状态机管理：`normal / moveIn / click / rightclick`。悬停高亮、移出恢复、点击选中（保持高亮，右键取消）、右键弹菜单。线的样式切换因为 Primitive 不可变，走的是销毁重建：改线宽 = 用缓存的原坐标 + 新样式新建一个 GeometryInstance 替换旧的——这也是 Primitive 路线的代价之一，好在有 `defaultStyle` 快照，恢复不难。
 
 ### 6.3 flyTo 与屏幕坐标联动
 
@@ -834,7 +834,7 @@ export function registerFlowLineMaterial() {
 
 ### 7.2 球面抛物线弧线（航线）
 
-两点间的航线不能画直线（会穿过地球），要在球面上撑一条弧线。做法：对起点终点的**单位方向向量**做球面插值得到路径点，再用抛物线公式 `h * 4t * (1 - t)` 沿弧顶法线抬升——t=0.5 时恰好达到最大高度 h：
+两点间的航线不能画直线（会穿过地球），要在球面上撑一条弧线。做法：对起点终点的单位方向向量做球面插值得到路径点，再用抛物线公式 `h * 4t * (1 - t)` 沿弧顶法线抬升——t=0.5 时恰好达到最大高度 h：
 
 ```typescript
 // linePrimitive.ts（有删减）
@@ -865,7 +865,7 @@ export function createArcPositions(start, end, segments = 50, heightFromEllipsoi
 
 ### 7.3 交互式画多边形
 
-区域圈选功能用的是 Entity API 的另一件武器——`CallbackProperty`：把预览面的 `hierarchy` 属性定义成一个回调函数，鼠标每点一个新顶点，回调返回的形状立即变化，**不用重建实体**就得到"橡皮筋"跟手效果。绘制完成后把顶点 `Cartesian3` 转回 WGS84 经纬度数组交给上层业务，预览用的临时实体随即销毁。绘制期间会置一个全局 `isDrawingPolygon` 标志，右键菜单等交互全部让路——两个交互系统共存时，状态互斥一定要显式管理。
+区域圈选功能用的是 Entity API 的另一件武器——`CallbackProperty`：把预览面的 `hierarchy` 属性定义成一个回调函数，鼠标每点一个新顶点，回调返回的形状立即变化，不用重建实体就得到"橡皮筋"跟手效果。绘制完成后把顶点 `Cartesian3` 转回 WGS84 经纬度数组交给上层业务，预览用的临时实体随即销毁。绘制期间会置一个全局 `isDrawingPolygon` 标志，右键菜单等交互全部让路——两个交互系统共存时，状态互斥一定要显式管理。
 
 <a id="sec8"></a>
 
@@ -884,14 +884,14 @@ export function createArcPositions(start, end, segments = 50, heightFromEllipsoi
 | 实时告警 | WebSocket 推送 → requestAnimationFrame 正弦呼吸图标 | `home/index.vue`、`eventPrimitive.ts` |
 | 拓扑/航线特效 | 自定义 GLSL 材质注入 `_materialCache`、球面插值 + 抛物线抬升 | `linePrimitive.ts` |
 
-以及这个项目**刻意没用**的东西和原因，同样是选型的一部分：
+以及这个项目刻意没用的东西和原因，同样是选型的一部分：
 
 - **地形**：没有地形数据源，`depthTestAgainstTerrain` 显式关闭，避免无地形时的坐标漂移；
 - **3D Tiles**：没有倾斜摄影/建筑模型需求；
 - **GeoJsonDataSource**：数据是业务 JSON 不是 GeoJSON，且 Entity/DataSource 路线扛不住实体量；
 - **CZML/KML**：没有时序驱动需求。
 
-**一句话记住**：Cesium 项目的数据加载，本质是回答"**数据从哪来、什么时候来、来了怎么高效上球、走了怎么干净下球**"——视口驱动回答了"什么时候"，增量 diff 和缓存治理回答了"怎么高效"和"怎么干净"，剩下的才是"从哪来"的工程问题。
+回头看，Cesium 项目的数据加载，本质是回答四个问题：数据从哪来、什么时候来、来了怎么高效上球、走了怎么干净下球。视口驱动回答了"什么时候"，增量 diff 和缓存治理回答了"怎么高效"和"怎么干净"，剩下的才是"从哪来"的工程问题。
 
 ### 文件地图
 

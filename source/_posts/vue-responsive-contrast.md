@@ -12,7 +12,7 @@ tags:
 
 # Vue2 与 Vue3 响应式原理对比：从 Object.defineProperty 到 Proxy
 
-Vue 最核心的能力之一，就是**响应式**：只需要修改数据 `state.count++`，页面就会自动更新，不需要手动查找和修改 DOM。
+Vue 最核心的能力之一就是响应式：只需要修改数据 `state.count++`，页面就会自动更新，不需要手动查找和修改 DOM。
 
 ```text
 修改数据 → 响应式系统感知变化 → 找到依赖该数据的逻辑 → 重新执行 → 视图更新
@@ -25,7 +25,7 @@ Vue2：Object.defineProperty → getter / setter → Dep / Watcher
 Vue3：Proxy → track / trigger → effect
 ```
 
-从 Vue2 到 Vue3，并不只是把一个 API 换成另一个 API，而是响应式系统整体设计的一次变化。本文从 `Object.defineProperty` 开始，逐步理解 Vue2 的实现方式，再看 Vue3 为什么引入 `Proxy`，以及两套系统的区别。
+从 Vue2 到 Vue3，并不只是把一个 API 换成另一个 API，而是响应式系统整体设计的一次调整。本文从 `Object.defineProperty` 开始，逐步理解 Vue2 的实现方式，再看 Vue3 为什么引入 `Proxy`，以及两套系统的区别。
 
 ---
 
@@ -41,9 +41,7 @@ function render() {
 }
 ```
 
-`render()` 明显依赖 `state.count`，但 JavaScript 本身并不知道这件事——它只能感知"属性被修改了"，却不知道**哪些代码依赖这个属性**。如果我们希望 `state.count++` 之后自动执行 `render()`，就需要建立一种关系：
-
-> **数据和使用数据的副作用之间建立依赖关系。**
+`render()` 明显依赖 `state.count`，但 JavaScript 本身并不知道这件事——它只能感知"属性被修改了"，却不知道哪些代码依赖这个属性。如果我们希望 `state.count++` 之后自动执行 `render()`，就需要在数据和使用数据的副作用之间建立依赖关系。
 
 因此，任何响应式系统最核心的都是两个过程：
 
@@ -79,7 +77,7 @@ defineReactive(state, 'count', state.count)
 // 此后 state.count 走 getter，state.count = 10 走 setter
 ```
 
-仅仅知道数据被读取和修改还不够，Vue 还需要知道**谁读取了这个数据**。思路是：第一次执行 `render()` 时会读取 `state.count`，从而触发 getter——就在这个时机把当前正在执行的副作用记录下来：
+仅仅知道数据被读取和修改还不够，Vue 还需要知道是谁读取了这个数据。思路是：第一次执行 `render()` 时会读取 `state.count`，从而触发 getter——就在这个时机把当前正在执行的副作用记录下来：
 
 ```text
 读取：render() → 读 state.count → getter → 记录 render
@@ -120,7 +118,7 @@ set(newValue) {
 
 ## 四、Vue2 的局限
 
-`Object.defineProperty` 的能力边界，带来了 Vue2 响应式的几个经典限制。
+`Object.defineProperty` 的能力边界，带来了 Vue2 响应式的几个经典限制。这里我第一次梳理时才发现，三个限制其实是同一个原因的不同表现。
 
 ### 1. 初始化时需要递归遍历
 
@@ -134,13 +132,11 @@ set(newValue) {
 
 ### 3. 数组需要特殊处理
 
-通过索引修改数组元素、调用 `push` 等变异方法，同样绕过了属性劫持。Vue2 的做法是**重写七个数组变异方法**（push / pop / shift / unshift / splice / sort / reverse）：在执行原始操作后手动通知依赖。这也是 Vue2 的数组响应式比普通对象复杂得多的原因。
+通过索引修改数组元素、调用 `push` 等变异方法，同样绕过了属性劫持。Vue2 的做法是重写七个数组变异方法（push / pop / shift / unshift / splice / sort / reverse）：在执行原始操作后手动通知依赖。这也是 Vue2 的数组响应式比普通对象复杂得多的原因。
 
 ### 小结
 
-这些限制并不是 Vue2 设计得不好，而是：
-
-> **Object.defineProperty 本身的能力决定了这种实现方式存在边界。**
+这些限制并不是 Vue2 设计得不好，根源在于 Object.defineProperty 本身的能力决定了这种实现方式存在边界。
 
 ---
 
@@ -170,7 +166,7 @@ const proxy = new Proxy(state, {
 })
 ```
 
-**因为 Proxy 代理的是整个对象而不是某个已存在的属性，之前的所有限制都自然解决了：**
+因为 Proxy 代理的是整个对象而不是某个已存在的属性，之前的所有限制都自然解决了：
 
 ```text
 proxy.name = 'Tom'      → set             新增属性，天然被拦截
@@ -203,7 +199,7 @@ effect(() => {
 修改 state.count++ → Proxy.set  → trigger() → 找到对应 effect → 重新执行
 ```
 
-`effect` 可以简单理解成**一个会根据响应式数据变化而重新执行的函数**。Vue 组件渲染、计算属性、watch 等能力，都建立在类似的副作用机制之上。
+`effect` 可以简单理解成一个会根据响应式数据变化而重新执行的函数。Vue 组件渲染、计算属性、watch 等能力，都建立在类似的副作用机制之上。
 
 ### 依赖保存在哪：WeakMap → Map → Set
 
@@ -227,9 +223,7 @@ WeakMap
 
 ### 一个容易混淆的点：Proxy 并不等于响应式
 
-"Vue3 使用 Proxy 实现响应式"这句话从原理上看并不完整——Proxy 只是 JavaScript 提供的代理机制，单独一个 Proxy 不会产生任何响应式。完整的系统是多个机制的组合：
-
-> **Vue3 使用 Proxy 作为拦截基础，再通过 track、trigger 和 effect 建立完整的依赖追踪机制。**
+"Vue3 使用 Proxy 实现响应式"这句话从原理上看并不完整——Proxy 只是 JavaScript 提供的代理机制，单独一个 Proxy 不会产生任何响应式。完整的说法是：Vue3 使用 Proxy 作为拦截基础，再通过 track、trigger 和 effect 建立完整的依赖追踪机制。
 
 ---
 
@@ -248,7 +242,7 @@ WeakMap
 | 依赖结构  | 以 Dep 为核心               | WeakMap → Map → Set      |
 | 响应式创建 | 初始化时遍历                  | 访问时通过 Proxy 代理           |
 
-这里最值得注意的并不是 API 名称变化，而是**观察粒度**的变化：
+这里最值得注意的并不是 API 名称变化，而是观察粒度的变化：
 
 ```text
 Vue2：属性级别 —— 提前遍历，对每个属性做劫持（需要提前知道有哪些属性）
@@ -270,13 +264,13 @@ Vue3：Proxy → get / set → track / trigger → effect
                               └─ 依赖存于 WeakMap → Map → Set
 ```
 
-但两套系统最核心的思想其实从未变化：
+但两套系统最核心的思想其实从未变化，说白了就是：
 
 ```text
 读取 → 收集依赖
 修改 → 触发依赖
 ```
 
-Vue3 的响应式升级并不是简单的 API 替换，而是从**属性级别的数据劫持**演进到**对象级别的运行时代理和依赖追踪**。这个更统一、更完整的响应式基础，也为 Vue3 的 `ref`、`reactive`、`computed`、`watch` 以及 Composition API 提供了支撑。
+Vue3 的响应式升级并不是简单的 API 替换，而是从属性级别的数据劫持，演进到对象级别的运行时代理和依赖追踪。这个更统一、更完整的响应式基础，也为 Vue3 的 `ref`、`reactive`、`computed`、`watch` 以及 Composition API 提供了支撑。
 
 ---

@@ -11,16 +11,14 @@ tags:
   - async/await
 ---
 
-我以前对 Promise 的理解就一句话：**解决回调地狱的。** 这话没错，但远远不够——直到被一连串问题问住：
+我以前对 Promise 的理解就一句话：解决回调地狱的。这话没错，但远远不够——直到被一连串问题问住：
 
-- `new Promise()` 里的代码为什么是**同步执行**的？
+- `new Promise()` 里的代码为什么是同步执行的？
 - 明明已经 resolve 了，`.then()` 为什么还是不立即跑？
 - `then` 里 `return 123`，下一个 `then` 怎么就拿到了 `123`？`throw` 的错为什么后面的 `catch` 接得住？
 - `async/await` 和 Promise 到底什么关系？
 
-后来才想明白，Promise 本质是一套抽象：
-
-> **用状态机表示「未来才产生的结果」，用 then / catch / finally 描述后续处理，用链式 Promise 传递值与错误，再交给微任务机制调度执行。**
+后来才想明白，Promise 本质是一套抽象：用状态机表示「未来才产生的结果」，用 then / catch / finally 描述后续处理，用链式 Promise 传递值与错误，再交给微任务机制调度执行。
 
 ```text
 Promise
@@ -48,7 +46,7 @@ getUser((user) => {
 });
 ```
 
-Promise 的解法：**把「未来会得到的结果」封装成一个对象**。`fetch('/api/user')` 立刻返回一个 promise——现在还没有结果，未来要么 fulfilled（用户数据）、要么 rejected（错误原因）。此后的所有问题，都变成「怎么管理这个对象」。
+Promise 的解法是把「未来会得到的结果」封装成一个对象。`fetch('/api/user')` 立刻返回一个 promise——现在还没有结果，未来要么 fulfilled（用户数据）、要么 rejected（错误原因）。此后的所有问题，都变成「怎么管理这个对象」。
 
 ## 二、状态机：Promise 的核心不是 then，是状态
 
@@ -58,7 +56,7 @@ pending ──resolve──► fulfilled（保存 value）
    └──reject───────► rejected（保存 reason）
 ```
 
-最重要的一条规则：**状态只能从 pending 变一次，之后不可逆**：
+最重要的一条规则：状态只能从 pending 变一次，之后不可逆：
 
 ```js
 new Promise((resolve, reject) => {
@@ -69,7 +67,7 @@ new Promise((resolve, reject) => {
 // 最终：fulfilled，value = 'A'
 ```
 
-而 `resolve` / `reject` 做的事是完整的一条链：**改变状态 → 保存结果 → 触发已注册的 reactions → 把它们排进微任务队列**。最后一步，就是「then 为什么是异步的」的答案。
+而 `resolve` / `reject` 做的事是完整的一条链：改变状态 → 保存结果 → 触发已注册的 reactions → 把它们排进微任务队列。最后一步，就是「then 为什么是异步的」的答案。
 
 ## 三、执行时机：executor 同步，then 是微任务
 
@@ -86,7 +84,7 @@ console.log('4');
 // 输出：1 → 2 → 4 → 3
 ```
 
-**executor 是同步执行的**，不会因为写在 `new Promise` 里就变异步；真正异步的是 `then` 的回调——即使 Promise 已经 settled，回调也要等当前同步代码跑完、轮到微任务时才执行。加上 setTimeout 就凑成经典面试题：
+executor 是同步执行的，不会因为写在 `new Promise` 里就变异步；真正异步的是 `then` 的回调——即使 Promise 已经 settled，回调也要等当前同步代码跑完、轮到微任务时才执行。加上 setTimeout 就凑成经典面试题：
 
 ```js
 console.log('1');
@@ -99,7 +97,7 @@ console.log('4');
 
 ## 四、链式调用：then 永远返回一个新 Promise
 
-链式调用的基础：`then` 同时做两件事——注册当前 Promise 的后续处理，**创建并返回一个新的 Promise**。所以 `.then().then()` 连的从来不是同一个对象。新 Promise 的状态由回调的返回值决定，规则只有三条：
+链式调用的基础：`then` 同时做两件事——注册当前 Promise 的后续处理，创建并返回一个新的 Promise。所以 `.then().then()` 连的从来不是同一个对象。新 Promise 的状态由回调的返回值决定，规则只有三条：
 
 | then 回调里 | 新 Promise |
 | --- | --- |
@@ -124,9 +122,9 @@ fetch('/api/user')
 
 ## 五、微任务：Promise 和 Event Loop 的分工
 
-Promise 本身不是事件循环。分工是：**Promise 负责状态、结果和 reactions；宿主的事件循环负责什么时候执行它们**——reaction 被排进微任务队列，每个宏任务结束后清空。
+Promise 本身不是事件循环。分工是：Promise 负责状态、结果和 reactions；宿主的事件循环负责什么时候执行它们——reaction 被排进微任务队列，每个宏任务结束后清空。
 
-一个容易忽视的细节：链上的 then 是**逐个**入队的——第一个 then 的回调执行完、它返回的新 Promise settled 后，第二个 then 的回调才入队：
+一个容易忽视的细节：链上的 then 是逐个入队的——第一个 then 的回调执行完、它返回的新 Promise settled 后，第二个 then 的回调才入队：
 
 ```js
 Promise.resolve().then(() => console.log(1)).then(() => console.log(2));
@@ -161,13 +159,13 @@ const [user, goods, orders] = await Promise.all([getUser(), getGoods(), getOrder
 
 三个细节常被问：
 
-1. `all` 的结果**按输入顺序**排列，不是完成顺序——B 先回来也排在第二位；
-2. `all` 一个失败立即 rejected，但**不会自动取消**其他已发出的请求——要取消得配 `AbortController`；
+1. `all` 的结果按输入顺序排列，不是完成顺序——B 先回来也排在第二位；
+2. `all` 一个失败立即 rejected，但不会自动取消其他已发出的请求——要取消得配 `AbortController`；
 3. `race` 同样只是「取先到的结果」，不会取消落败者。
 
 ## 七、async/await：Promise 之上的语法糖
 
-async/await 不是 Promise 的替代品，而是**建立在 Promise 之上的语法机制**。两条核心规则，一个例子全占了：
+async/await 不是 Promise 的替代品，而是建立在 Promise 之上的语法机制。两条核心规则，一个例子全占了：
 
 ```js
 async function foo() {
@@ -205,7 +203,7 @@ class MyPromise {
 
 为什么需要 callbacks 数组：`p.then(f1); p.then(f2);` 在 pending 期注册的回调，要等 `resolve` 时再依次触发。
 
-真正的难点不在状态机，而在 **then 的返回值解析**（规范叫 Promise Resolution Procedure）：回调可能 return 普通值、return 一个 Promise、return 一个 thenable（`{ then(resolve) {} }`）、甚至 throw——每种情况新 Promise 怎么变，全在这一个函数里。把这段写对，才算真懂 then 链。
+真正的难点不在状态机，而在 then 的返回值解析（规范叫 Promise Resolution Procedure）：回调可能 return 普通值、return 一个 Promise、return 一个 thenable（`{ then(resolve) {} }`）、甚至 throw——每种情况新 Promise 怎么变，全在这一个函数里。把这段写对，才算真懂 then 链。
 
 ## 九、常见误区速查
 
@@ -244,7 +242,7 @@ pending ──resolve──► fulfilled(value)
 - **catch 为什么能接住前面的错？** then 回调 throw 会让它返回的新 Promise rejected，错误沿链向后传播直到遇到 onRejected；catch 就是 `then(undefined, onRejected)`。
 - **async/await 和 Promise 的关系？** 语法糖：async 函数必返回 Promise，await 后的代码等价于 then 回调，暂停的是当前函数而非线程。 -->
 
-**一句话记住**：Promise = 状态机 + 链式传递 + 微任务调度——状态存结果，链传值与错，微任务定时机；async/await 只是这套机制的衣服。
+最后把整篇收成一段话：Promise = 状态机 + 链式传递 + 微任务调度——状态存结果，链传值与错，微任务定时机；async/await 只是这套机制的一层语法外衣。
 
 <!-- ## 参考资料
 

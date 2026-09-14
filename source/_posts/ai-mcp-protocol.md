@@ -15,7 +15,7 @@ MCP（Model Context Protocol）是 Anthropic 2024 年 11 月开源的协议，�
 
 > 每做一个 AI 应用，就要给每个模型重新接一遍数据库、文件系统、搜索……M 个应用 × N 个工具 = M×N 份胶水代码。
 
-MCP 把这个问题变成 M+N：工具方实现一次 **MCP Server**，应用方实现一次 **MCP Client**，中间走统一协议。官方的类比很形象——**"AI 应用的 USB-C 接口"**：外设（数据库、GitHub、Figma…）做成标准插头，即插即用。
+MCP 把这个问题变成 M+N：工具方实现一次 **MCP Server**，应用方实现一次 **MCP Client**，中间走统一协议。官方的类比很形象，叫它"AI 应用的 USB-C 接口"：外设（数据库、GitHub、Figma…）做成标准插头，即插即用。
 
 ```
 ┌─────────┐   MCP 协议    ┌─────────────┐
@@ -31,16 +31,16 @@ MCP 把这个问题变成 M+N：工具方实现一次 **MCP Server**，应用方
 
 | 能力 | 是什么 | 控制权在谁 |
 |------|--------|-----------|
-| **Tools** | 可执行的函数：查库、发请求、写文件 | 模型决定调用（有副作用，应用审批） |
-| **Resources** | 只读数据：文件内容、配置、日志 | 应用决定加载 |
-| **Prompts** | 预置的提示词模板 | 用户主动选用（如 `/analyze-db`） |
+| Tools | 可执行的函数：查库、发请求、写文件 | 模型决定调用（有副作用，应用审批） |
+| Resources | 只读数据：文件内容、配置、日志 | 应用决定加载 |
+| Prompts | 预置的提示词模板 | 用户主动选用（如 `/analyze-db`） |
 
-日常开发里 90% 的场景用的是 **Tools**。比如官方的 MCP Server：`filesystem`（读写文件）、`github`（PR/Issue 操作）、`postgres`（安全 SQL 查询）、`puppeteer`（浏览器自动化）。
+日常开发里 90% 的场景用的是 Tools。比如官方的 MCP Server：`filesystem`（读写文件）、`github`（PR/Issue 操作）、`postgres`（安全 SQL 查询）、`puppeteer`（浏览器自动化）。
 
 ## 3. 传输方式：stdio 与 HTTP
 
-- **stdio**：Server 作为子进程启动，走标准输入输出。**本机开发用这个**，零网络配置。
-- **Streamable HTTP**：Server 独立部署，HTTP 通信。**远程/团队共享用这个**，可加鉴权。
+- **stdio**：Server 作为子进程启动，走标准输入输出。本机开发用这个，零网络配置。
+- **Streamable HTTP**：Server 独立部署，HTTP 通信。远程/团队共享用这个，可加鉴权。
 
 以 Cursor 为例，配置一个本机 Server 只需要一段 JSON：
 
@@ -102,10 +102,10 @@ MCP Client 发起调用 → MCP Server 执行 → 返回结果              ← 
 - **Function Calling 是模型的能力**：看到用户问题，决定"要不要调工具、调哪个、传什么参数"——决策层。
 - **MCP 是工程的协议**：工具怎么注册、怎么传输、怎么执行——执行层。
 
-模型完全可以通过 Function Calling 调一个 MCP 管理的工具；也可以反过来，不用 MCP、把函数直接写在应用里（下一篇会讲这种直连写法）。**决策靠 Function Calling，接入靠 MCP**，两者是配合关系而非替代关系。
+模型完全可以通过 Function Calling 调一个 MCP 管理的工具；也可以反过来，不用 MCP、把函数直接写在应用里（下一篇会讲这种直连写法）。两者是配合关系，谁也不替代谁。
 
 ## 6. 日常开发选型建议
 
 - **个人/团队提效**：优先装现成的官方/社区 Server（github、postgres、playwright…），配置即用。
 - **自己的应用要接工具**：内部小工具直接用 Function Calling 直连最快；工具要多方复用、或要用别人做好的 Server 时，上 MCP。
-- **注意安全边界**：Tools 有副作用（写库、删文件），生产环境务必开启应用侧的审批（human-in-the-loop），别让模型静默执行危险操作。
+- **注意安全边界**：Tools 有副作用（写库、删文件），生产环境务必开启应用侧的审批（human-in-the-loop），别让模型静默执行危险操作。个人建议把这条当硬规矩，别抱侥幸。

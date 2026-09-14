@@ -13,9 +13,9 @@ tags:
   - MinIO
 ---
 
-学 Spring Boot 的时候，知识点是一个一个学的：依赖注入、拦截器、注解校验、MyBatis……每个都能看懂，但始终没回答一个问题——**它们在真实项目里是怎么协同工作的**。big-event 是我学完 Java 后按课程完成的第一个完整后端项目，一个文章管理系统，从建表到接口全部跑通。
+学 Spring Boot 的时候，知识点是一个一个学的：依赖注入、拦截器、注解校验、MyBatis……每个都能看懂，但始终没回答一个问题——它们在真实项目里是怎么协同工作的。big-event 是我学完 Java 后按课程完成的第一个完整后端项目，一个文章管理系统，从建表到接口全部跑通。
 
-> **单个知识点和完整项目之间的差距，在于「横切关注点」怎么组织**：认证放在拦截器里统一做，而不是每个接口手写一遍；当前用户身份用 ThreadLocal 传递，而不是在参数里层层透传；异常和响应用全局处理器统一格式，而不是各接口自理。这个项目把这四件事各做了一遍，本文就以「一次请求的生命周期」为主线来复盘。
+做完之后回头看，单个知识点和完整项目之间的差距，主要落在「横切关注点」怎么组织上：认证收敛到拦截器里统一做，免得每个接口手写一遍；当前用户身份靠 ThreadLocal 传递，省去了在参数里层层透传；异常和响应交给全局处理器统一格式，各接口不用自理。这个项目把这四件事各做了一遍，本文就以「一次请求的生命周期」为主线来复盘。
 
 ```text
                     big-event 文章管理系统
@@ -68,7 +68,7 @@ com.big_event
 
 ## 二、一次请求的生命周期
 
-**先给结论，再给论证**：这个项目里最值得复盘的不是某个接口，而是每个请求都要走的这条固定链路。
+先给结论：这个项目里最值得复盘的其实不是某个接口，而是每个请求都要走的这条固定链路。
 
 以「查询我的文章列表」为例，一个带着 `Authorization` 头的请求进来之后：
 
@@ -97,7 +97,7 @@ Mapper（MyBatis：注解 SQL / XML 动态 SQL）──► MySQL
 afterCompletion ──► ThreadLocalUtil.remove()（清理线程上下文）
 ```
 
-链路的最后一步是**统一响应**。所有接口都返回 `Result<T>`，前端只需要认一种结构：
+链路的最后一步是统一响应。所有接口都返回 `Result<T>`，前端只需要认一种结构：
 
 ```java
 public class Result<T> {
@@ -114,7 +114,7 @@ public class Result<T> {
 }
 ```
 
-配套的是**全局异常处理**。没有它之前，任何一次参数校验失败都会抛出 `MethodArgumentNotValidException`，前端收到的是一整个堆栈页；有了它，所有未被捕获的异常都收敛成统一 JSON：
+配套的是全局异常处理。没有它之前，任何一次参数校验失败都会抛出 `MethodArgumentNotValidException`，前端收到的是一整个堆栈页；有了它，所有未被捕获的异常都收敛成统一 JSON：
 
 ```java
 @RestControllerAdvice
@@ -140,7 +140,7 @@ registry.addInterceptor(loginInterceptor).excludePathPatterns(
 
 ## 三、登录认证：JWT + Redis 双重校验
 
-**这是整个项目最核心的一条链路。** 单独用 JWT 有一个绕不过去的问题：token 一旦签发，在过期之前始终有效，服务端没有任何办法作废它——用户改了密码、被封号，旧 token 依然能畅通无阻。解法是把「token 是否有效」的裁决权收回服务端：**JWT 负责携带身份，Redis 负责决定生死**。
+这是整个项目最核心的一条链路。单独用 JWT 有一个绕不过去的问题：token 一旦签发，在过期之前始终有效，服务端没有任何办法作废它——用户改了密码、被封号，旧 token 依然能畅通无阻。解法是把「token 是否有效」的裁决权收回服务端：JWT 负责携带身份，Redis 负责决定生死。
 
 ### 3.1 登录：签发 token 并登记到 Redis
 
@@ -183,7 +183,7 @@ public class JwtUtil {
 
 ### 3.2 拦截器：先查 Redis，再解析 JWT
 
-每个受保护的请求都要过这道闸。注意校验顺序：**先查 Redis 再解析 JWT**——Redis 里没有，说明服务端已经作废了这个 token，直接 401：
+每个受保护的请求都要过这道闸。注意校验顺序：先查 Redis 再解析 JWT——Redis 里没有，说明服务端已经作废了这个 token，直接 401：
 
 ```java
 @Component
@@ -248,7 +248,7 @@ Map<String, Object> map = ThreadLocalUtil.get();
 Integer userId = (Integer) map.get("id");
 ```
 
-这里有一个**必须理解的坑**：Tomcat 处理请求用的是线程池，线程是复用的。Entry 的 key 是弱引用会被 GC，但 value 是强引用——如果不在请求结束时 `remove()`，上一个请求的用户信息会残留在线程里，轻则串号（A 看到 B 的数据），重则内存泄漏。所以 `afterCompletion` 里的 `ThreadLocalUtil.remove()` 不是可选的收尾，而是正确性的一部分。
+这里有一个必须理解的坑：Tomcat 处理请求用的是线程池，线程是复用的。Entry 的 key 是弱引用会被 GC，但 value 是强引用——如果不在请求结束时 `remove()`，上一个请求的用户信息会残留在线程里，轻则串号（A 看到 B 的数据），重则内存泄漏。所以 `afterCompletion` 里的 `ThreadLocalUtil.remove()` 不是可选的收尾，而是正确性的一部分。
 
 ### 3.4 改密码 = 强制下线
 
@@ -269,14 +269,14 @@ operations.getOperations().delete(token);
 
 项目里参数校验分三个层次，复杂度依次递进。
 
-**第一层：内置注解直接标在参数上。** 注册接口的用户名密码规则，一条 `@Pattern` 搞定（配合类上的 `@Validated`），替代了之前手写的一长串 if：
+第一层，内置注解直接标在参数上。注册接口的用户名密码规则，一条 `@Pattern` 搞定（配合类上的 `@Validated`），替代了之前手写的一长串 if：
 
 ```java
 public Result register(@Pattern(regexp = "^\\S{5,16}$") String username,
                        @Pattern(regexp = "^\\S{5,16}$") String password) {
 ```
 
-**第二层：分组校验，一个 POJO 两套规则。** 分类的「新增」不需要 id（数据库自增），「修改」必须带 id。为同一个 POJO 声明两个分组，让 `id` 只在 Update 组生效：
+第二层，分组校验，一个 POJO 两套规则。分类的「新增」不需要 id（数据库自增），「修改」必须带 id。为同一个 POJO 声明两个分组，让 `id` 只在 Update 组生效：
 
 ```java
 @Data
@@ -297,7 +297,7 @@ public class Category {
 
 Controller 里指定用哪套规则：`@Validated(Category.Add.class)` 新增、`@Validated(Category.Update.class)` 修改。
 
-**第三层：自定义校验注解。** 文章的 `state` 字段只允许「已发布」或「草稿」，内置注解表达不了「枚举值集合」这种语义（`@Pattern` 写中文正则太绕），于是自己写一个 `@State`。自定义校验注解三个要素——注解本身、校验器、注册关联：
+第三层，自定义校验注解。文章的 `state` 字段只允许「已发布」或「草稿」，内置注解表达不了「枚举值集合」这种语义（`@Pattern` 写中文正则太绕），于是自己写一个 `@State`。自定义校验注解三个要素——注解本身、校验器、注册关联：
 
 ```java
 // 注解：用 @Constraint 指定校验器
@@ -332,11 +332,11 @@ private String state;
 
 ## 五、文章列表：PageHelper 分页 + MyBatis 动态 SQL
 
-文章列表接口的要求是：**按分类、状态可选筛选，只看自己的文章，按更新时间倒序，分页返回**。两个组件配合完成。
+文章列表接口的要求是：按分类、状态可选筛选，只看自己的文章，按更新时间倒序，分页返回。两个组件配合完成。
 
 ### 5.1 PageHelper：一行开启物理分页
 
-PageHelper 的用法非常「隐式」——在查询前调一行 `startPage`，它就会拦截**紧随其后的那一条** MyBatis 查询，自动改写成 `limit` 语句并附带一次 count 查询：
+PageHelper 的用法非常「隐式」——在查询前调一行 `startPage`，它就会拦截紧随其后的那一条 MyBatis 查询，自动改写成 `limit` 语句并附带一次 count 查询：
 
 ```java
 public PageBean<Article> list(Integer pageNum, Integer pageSize,
@@ -392,7 +392,7 @@ public class PageBean<T> {
 </select>
 ```
 
-`<where>` 标签会自动处理首个 `and` 的拼接问题；`create_user = #{userId}` 不在 `<if>` 里——**数据隔离是硬条件，不是筛选项**。项目里 UserMapper、CategoryMapper 全用注解（`@Select`/`@Insert`），只有这条多条件查询用了 XML，这个取舍是对的：简单 SQL 注解直观，动态 SQL 交给 XML。
+`<where>` 标签会自动处理首个 `and` 的拼接问题；`create_user = #{userId}` 不在 `<if>` 里——数据隔离是硬条件，不是筛选项。项目里 UserMapper、CategoryMapper 全用注解（`@Select`/`@Insert`），只有这条多条件查询用了 XML，这个取舍是对的：简单 SQL 注解直观，动态 SQL 交给 XML。
 
 另外一个小但重要的配置——数据库下划线命名到 Java 驼峰命名的自动映射，不然 `cover_img` 映射不到 `coverImg`：
 
@@ -404,7 +404,7 @@ mybatis:
 
 ## 六、文件上传：从本地磁盘到 MinIO
 
-项目里写了两个版本的上传接口，放在一起对比正好能说明**为什么要用对象存储**。
+项目里写了两个版本的上传接口，放在一起对比正好能说明为什么要用对象存储。
 
 ### 6.1 本地磁盘版：能用，但处处是坑
 
@@ -433,7 +433,7 @@ public class MinioProperties {
 }
 ```
 
-第二步是注册 `MinioClient`，并且**在启动时自动初始化桶**：不存在则创建，再统一设置成「公开读」策略——桶里的对象可以直接通过 URL 访问，无需签名：
+第二步是注册 `MinioClient`，并且在启动时自动初始化桶：不存在则创建，再统一设置成「公开读」策略——桶里的对象可以直接通过 URL 访问，无需签名：
 
 ```java
 @Bean
@@ -477,7 +477,7 @@ private void initBucket(MinioClient client) {
 }
 ```
 
-有一个细节值得记下：无论桶是新建还是已存在，策略都**重新应用一次**——这样即使某次启动时设置策略失败、桶停留在私有状态，下次启动也能自动修正。
+有一个细节值得记下：无论桶是新建还是已存在，策略都重新应用一次——这样即使某次启动时设置策略失败、桶停留在私有状态，下次启动也能自动修正。
 
 第三步是上传接口本身，UUID 生成唯一对象名（保留原始扩展名），流式上传后拼接可直接访问的 URL：
 
@@ -509,19 +509,19 @@ String url = endpoint + "/" + minioProperties.getBucket() + "/" + objectName;
 
 复盘要看做得对的，也要看留了坑的。以下是这个项目当前明确的问题和对应的改进方向：
 
-**密码用了裸 MD5。** MD5 是快速哈希，彩虹表可以秒查常见口令。改进方向是 BCrypt：自带随机盐、可调慢速因子，同一个密码每次哈希结果都不同。学习项目可以接受 MD5，但值得在第一次写时就养成用 BCrypt 的习惯。
+密码用了裸 MD5。MD5 是快速哈希，彩虹表可以秒查常见口令。改进方向是 BCrypt：自带随机盐、可调慢速因子，同一个密码每次哈希结果都不同。学习项目可以接受 MD5，但值得在第一次写时就养成用 BCrypt 的习惯。
 
-**Redis TTL（1 小时）短于 JWT 有效期（12 小时）。** 两个过期时间不一致，实际效果是 token 一小时就失效，用户被迫频繁重新登录——JWT 的 12 小时成了摆设。应该让两者对齐，或者干脆让 JWT 只做载体、有效期完全交给 Redis 管理。
+Redis TTL（1 小时）短于 JWT 有效期（12 小时）。两个过期时间不一致，实际效果是 token 一小时就失效，用户被迫频繁重新登录——JWT 的 12 小时成了摆设。应该让两者对齐，或者干脆让 JWT 只做载体、有效期完全交给 Redis 管理。
 
-**登录没有作废旧 token。** 每次登录都往 Redis 新增一个 token，旧 token 只要没过期依然有效，Redis 里会积累一个用户的多个有效 token。更严谨的做法是登录时按用户维度删旧 token，或者改用 `userId → token` 的结构存储。
+登录没有作废旧 token。每次登录都往 Redis 新增一个 token，旧 token 只要没过期依然有效，Redis 里会积累一个用户的多个有效 token。更严谨的做法是登录时按用户维度删旧 token，或者改用 `userId → token` 的结构存储。
 
-**自动填充没做完。** 项目里已经建了 `@AutoFill` 注解和 `OperationType`（INSERT/UPDATE）枚举，但 AOP 依赖和切面类都没写，`createTime`/`updateTime` 目前是每个 ServiceImpl 里手动 set 的。补一个切面拦截标了 `@AutoFill` 的 mapper 方法、通过反射统一填充公共字段，是一个很好的下一步练习——这也是把这个项目从「跟教程」推向「自己设计」的一步。
+自动填充没做完。项目里已经建了 `@AutoFill` 注解和 `OperationType`（INSERT/UPDATE）枚举，但 AOP 依赖和切面类都没写，`createTime`/`updateTime` 目前是每个 ServiceImpl 里手动 set 的。补一个切面拦截标了 `@AutoFill` 的 mapper 方法、通过反射统一填充公共字段，是一个很好的下一步练习——这也是把这个项目从「跟教程」推向「自己设计」的一步。
 
-**异常处理粒度太粗。** `GlobalExceptionHandler` 只有一个 `Exception.class` 兜底，参数校验异常和业务异常返回的信息格式并不友好。可以按异常类型细分：`MethodArgumentNotValidException` 提取第一条字段错误、自定义 `BusinessException` 区分业务语义。
+异常处理粒度太粗。`GlobalExceptionHandler` 只有一个 `Exception.class` 兜底，参数校验异常和业务异常返回的信息格式并不友好。可以按异常类型细分：`MethodArgumentNotValidException` 提取第一条字段错误、自定义 `BusinessException` 区分业务语义。
 
 ## 八、总结
 
-用一条主线收束全文：**big-event 的价值不在于功能多，而在于每个功能都踩在一条完整的工程链路上**。
+用一条主线收束全文：big-event 的价值不在于功能多，而在于每个功能都踩在一条完整的工程链路上。
 
 - 认证：JWT 携带身份 + Redis 掌握生死，拦截器统一校验，`ThreadLocal` 全链路传递用户上下文，`afterCompletion` 里 `remove()` 防串号防泄漏；
 - 校验：内置注解 → 分组校验（一个 POJO 两套规则）→ 自定义 `@State` 注解（注解 + 校验器 + `@Constraint` 关联），复杂度随语义递进；
