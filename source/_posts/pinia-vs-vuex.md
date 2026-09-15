@@ -1,7 +1,7 @@
 ---
 title: Pinia 与 Vuex 状态管理总结：从单向数据流到组合式 Store
 date: 2026-09-10 21:30:00
-description: Vue 两个官方状态管理库的对比笔记：Vuex 的单向数据流与 mutations 存在的理由、它的五个痛点，Pinia 如何用组合式 API 逐个拆掉这些包袱；含 Option/Setup 双写法对照、$patch/$subscribe/$onAction 与插件机制原理、storeToRefs 解构响应性、组件外使用 store、Vuex → Pinia 迁移映射表与高频面试题。
+description: Vue 两个官方状态管理库的对比笔记：Vuex 的单向数据流与 mutations 存在的理由、它的五个痛点，Pinia 如何用组合式 API 逐个拆掉这些包袱；含 Option/Setup 双写法对照、$patch/$subscribe/$onAction 与插件机制原理、storeToRefs 解构响应性、组件外使用 store、Vuex → Pinia 迁移映射表。
 categories:
   - [Vue]
 tags:
@@ -40,7 +40,7 @@ tags:
 
 状态管理库做的事因此很朴素：把共享状态提到组件树外的一个全局仓库里，任何组件都能直接读写，同时保留响应式和可追踪性。
 
-但也要警惕反面：不是所有状态都该进全局仓库。表单草稿、弹窗开关、输入框焦点这类真正的局部状态，用 `ref`/`reactive` 留在组件内就好；只是嫌透传麻烦的话，`provide/inject` 或一个模块级 `ref`（见 7.5）可能比引一个库更合适。先有共享需求，再上状态管理。
+但也要警惕反面：不是所有状态都该进全局仓库。表单草稿、弹窗开关、输入框焦点这类真正的局部状态，用 `ref`/`reactive` 留在组件内就好；只是嫌透传麻烦的话，`provide/inject` 或一个模块级 `ref`（见 5.5）可能比引一个库更合适。先有共享需求，再上状态管理。
 
 ## 二、Vuex：中心化仓库与单向数据流
 
@@ -264,11 +264,10 @@ userStore.$subscribe((mutation, state) => {
   localStorage.setItem('user', JSON.stringify(state))
 }, { detached: true }) // detached: 组件卸载后仍继续订阅
 
-// $onAction：拦截 action 的执行（日志、埋点、错误上报）
-const unsubscribe = userStore.$onAction({
-  name: 'login',
-  after: (result) => console.log(`${name} 成功`, result),
-  onError: (err) => console.error(`${name} 失败`, err),
+// $onAction：拦截每一次 action 的执行（日志、埋点、错误上报），name 是 action 名
+const unsubscribe = userStore.$onAction(({ name, after, onError }) => {
+  after((result) => console.log(`${name} 成功`, result))
+  onError((err) => console.error(`${name} 失败`, err))
 })
 ```
 
@@ -421,29 +420,9 @@ export function useTheme() {
 | `mapState('user', [...])` | `storeToRefs(useUserStore())` | |
 | `store.dispatch('user/login')` | `userStore.login()` | |
 
-迁移前的 user 模块（Vuex）和迁移后（Pinia）对照：
+2.2 的 user 模块迁移过来就是：
 
 ```js
-// ── Vuex ──
-const userModule = {
-  namespaced: true,
-  state: () => ({ token: '' }),
-  mutations: {
-    SET_TOKEN(state, token) { state.token = token },
-    CLEAR_TOKEN(state) { state.token = '' },
-  },
-  actions: {
-    async login({ commit }, form) {
-      const { token } = await api.login(form)
-      commit('SET_TOKEN', token)
-    },
-    logout({ commit }) {
-      commit('CLEAR_TOKEN')
-    },
-  },
-}
-
-// ── Pinia ──
 export const useUserStore = defineStore('user', {
   state: () => ({ token: '' }),
   actions: {
@@ -459,27 +438,7 @@ export const useUserStore = defineStore('user', {
 
 代码量减半不是重点，重点是字符串派发全部变成了可跳转、可推导类型的方法调用。
 
-## 七、高频面试题速答
-
-1. 为什么 Pinia 去掉 mutations？
-   因为 mutations 存在的唯一理由（同步边界保证 DevTools 快照可靠）在 Vue3 响应式系统下不再必要：state 是 `reactive` 对象，任何途径的修改都可被 `$subscribe` 观测并记录，DevTools 能力无损。
-
-2. Pinia 为什么不需要 strict 模式？
-   同上。Vuex 的严格模式防的是「绕过 mutation 导致 DevTools 看不见」；Pinia 里不存在看不见的修改，直接改 state 只是风格问题，不是正确性问题。
-
-3. 直接解构 store 为什么丢响应性？
-   `const { token } = store` 是对 reactive 属性的一次性读取，拿到原始值。要用 `storeToRefs`（内部 `toRef` 保持引用联系）；action 是普通函数不受影响。
-
-4. Pinia 和 Vuex 会长期并存吗？
-   不会。Pinia 官方定位就是「下一代 Vuex」，Vuex 已进入维护模式（只修 bug 不加特性），Vue 官方文档状态管理章节只推荐 Pinia。
-
-5. 没有嵌套 modules，大型项目几十个 store 不会乱吗？
-   「扁平 + 组合」优于「树形 + 命名空间」：模块间依赖显式化为 `useOtherStore()` 调用，跨域复用靠组合而非 `rootState`；按业务域拆文件（`stores/user.js`、`stores/cart.js`）后，目录即架构。
-
-6. $patch 和直接赋值有什么区别？
-   `$patch` 把多次修改合并为一次订阅通知，并且以 `patch object` 类型记录进 DevTools；批量更新时用它可减少订阅回调（如持久化写 localStorage）的触发次数。
-
-## 八、总结
+## 七、总结
 
 | | Vuex | Pinia |
 | --- | --- | --- |
